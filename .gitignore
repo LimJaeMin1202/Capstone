@@ -11,6 +11,9 @@ backend/data/records.json
 .env
 .env.local
 
+# Spring Boot 설정 (비밀번호 포함)
+backend/src/main/resources/application.yml
+
 # OS
 .DS_Store
 Thumbs.db

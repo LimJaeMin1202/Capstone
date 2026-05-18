@@ -1,0 +1,89 @@
+{
+  "arm-raise": {
+    "id": "arm-raise",
+    "name": "팔 옆으로 들기",
+    "category": "어깨",
+    "icon": "🙆",
+    "desc": "어깨 외전 운동",
+    "difficulty": "초급",
+    "targetSets": 3,
+    "targetReps": 10,
+    "joints": [
+      {
+        "label": "왼팔",
+        "points": [11, 5, 7],
+        "minAngle": 70,
+        "maxAngle": 110
+      },
+      {
+        "label": "오른팔",
+        "points": [12, 6, 8],
+        "minAngle": 70,
+        "maxAngle": 110
+      }
+    ],
+    "feedback": {
+      "ok": "✅ 좋은 자세예요!",
+      "low": "⚠️ 팔을 더 옆으로 들어주세요",
+      "high": "⚠️ 너무 높이 들었어요"
+    }
+  },
+  "elbow-flex": {
+    "id": "elbow-flex",
+    "name": "팔꿈치 굽히기",
+    "category": "팔꿈치",
+    "icon": "💪",
+    "desc": "팔꿈치 굴곡 운동",
+    "difficulty": "초급",
+    "targetSets": 3,
+    "targetReps": 10,
+    "joints": [
+      {
+        "label": "왼팔꿈치",
+        "points": [5, 7, 9],
+        "minAngle": 60,
+        "maxAngle": 120
+      },
+      {
+        "label": "오른팔꿈치",
+        "points": [6, 8, 10],
+        "minAngle": 60,
+        "maxAngle": 120
+      }
+    ],
+    "feedback": {
+      "ok": "✅ 잘 굽혀지고 있어요!",
+      "low": "⚠️ 팔꿈치를 더 굽혀주세요",
+      "high": "⚠️ 너무 많이 굽혔어요"
+    }
+  },
+  "squat": {
+    "id": "squat",
+    "name": "무릎 굽히기",
+    "category": "무릎",
+    "icon": "🏋️",
+    "desc": "하체 재활 운동",
+    "difficulty": "중급",
+    "targetSets": 3,
+    "targetReps": 10,
+    "joints": [
+      {
+        "label": "왼무릎",
+        "points": [11, 13, 15],
+        "minAngle": 60,
+        "maxAngle": 120
+      },
+      {
+        "label": "오른무릎",
+        "points": [12, 14, 16],
+        "minAngle": 60,
+        "maxAngle": 120
+      }
+    ],
+    "feedback": {
+      "ok": "✅ 좋은 자세예요!",
+      "low": "⚠️ 무릎을 더 굽혀주세요",
+      "high": "⚠️ 너무 많이 굽혔어요"
+    }
+  }
+}

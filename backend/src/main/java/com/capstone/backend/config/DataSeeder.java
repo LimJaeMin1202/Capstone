@@ -2,7 +2,7 @@ package com.capstone.backend.config;
 
 import com.capstone.backend.entity.Exercise;
 import com.capstone.backend.repository.ExerciseRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -31,10 +31,8 @@ public class DataSeeder implements ApplicationRunner {
         log.info("운동 데이터 시딩 시작...");
 
         try (InputStream is = new ClassPathResource("exercises.json").getInputStream()) {
-            List<Exercise> exercises = objectMapper.readValue(
-                    is,
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, Exercise.class)
-            );
+            Exercise[] array = objectMapper.readValue(is, Exercise[].class);
+            List<Exercise> exercises = List.of(array);
             exerciseRepository.saveAll(exercises);
             log.info("운동 데이터 시딩 완료! ({}개 운동 등록됨)", exercises.size());
         }

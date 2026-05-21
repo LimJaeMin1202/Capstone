@@ -1,13 +1,17 @@
-### 운동 전체 목록 조회
+### 운동 전체 목록 조회 (29개)
 GET http://localhost:8080/api/exercises
 Accept: application/json
 
-### 특정 운동 조회 (팔 옆으로 들기)
-GET http://localhost:8080/api/exercises/arm-raise
+### 특정 운동 조회 (앉아서 앞으로 나란히)
+GET http://localhost:8080/api/exercises/seated-front-raise
 Accept: application/json
 
-### 특정 운동 조회 (팔꿈치 굽히기)
-GET http://localhost:8080/api/exercises/elbow-flex
+### 특정 운동 조회 (앉아서 팔 굽히기)
+GET http://localhost:8080/api/exercises/seated-biceps-curl
+Accept: application/json
+
+### 특정 운동 조회 (무릎 꿇고 플랭크)
+GET http://localhost:8080/api/exercises/kneeling-plank
 Accept: application/json
 
 ### 새 운동 등록 (테스트용)
@@ -17,27 +21,17 @@ Content-Type: application/json
 {
   "id": "test-exercise",
   "name": "테스트 운동",
-  "category": "테스트",
-  "icon": "🧪",
-  "description": "API 테스트용 가짜 운동",
+  "nameEn": "Test Exercise",
+  "category": "의자 착석",
+  "bodyPart": "테스트",
   "difficulty": "초급",
-  "targetSets": 3,
-  "targetReps": 10,
-  "feedback": {
-    "ok": "잘하고 있어요!",
-    "low": "더 들어요!",
-    "high": "너무 들었어요!"
-  },
-  "joints": [
-    {
-      "label": "테스트관절",
-      "pointA": 5,
-      "pointB": 7,
-      "pointC": 9,
-      "minAngle": 60,
-      "maxAngle": 120
-    }
-  ]
+  "jointA": "어깨",
+  "jointB": "팔꿈치",
+  "jointC": "손목",
+  "restAngle": 0,
+  "normalTarget": 90,
+  "allowedTarget": 60,
+  "notes": "API 테스트용 가짜 운동"
 }
 
 ### 등록한 테스트 운동 조회
@@ -47,7 +41,7 @@ Accept: application/json
 ### 테스트 운동 삭제
 DELETE http://localhost:8080/api/exercises/test-exercise
 
-### 운동 기록 전체 조회 (처음엔 빈 배열)
+### 운동 기록 전체 조회
 GET http://localhost:8080/api/records
 Accept: application/json
 
@@ -56,25 +50,14 @@ POST http://localhost:8080/api/records
 Content-Type: application/json
 
 {
-  "exerciseId": "arm-raise",
+  "exerciseId": "seated-front-raise",
   "duration": 60,
   "goodCount": 8,
   "accuracy": 80
 }
 
-### 운동 기록 또 저장
-POST http://localhost:8080/api/records
-Content-Type: application/json
-
-{
-  "exerciseId": "squat",
-  "duration": 90,
-  "goodCount": 12,
-  "accuracy": 75
-}
-
 ### 특정 운동의 기록만 조회
-GET http://localhost:8080/api/records?exerciseId=arm-raise
+GET http://localhost:8080/api/records?exerciseId=seated-front-raise
 Accept: application/json
 
 ### 모든 기록 삭제

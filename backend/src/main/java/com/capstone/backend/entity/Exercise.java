@@ -7,9 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Entity
 @Table(name = "exercises")
 @Getter
@@ -20,34 +17,37 @@ import java.util.List;
 public class Exercise {
 
     @Id
-    private String id;
+    private String id;                 // 슬러그 (예: seated-front-raise)
 
-    private String name;
+    private String name;               // 한글명
 
-    private String category;
+    @Column(name = "name_en")
+    private String nameEn;             // 영어명
 
-    private String icon;
+    private String category;           // 의자 착석 / 벽·의자 지지 / 바닥·매트
 
-    @Column(name = "description")
-    private String description;
+    @Column(name = "body_part")
+    private String bodyPart;           // 운동 부위
 
-    private String difficulty;
+    private String difficulty;         // 초급 / 중급 / 고급
 
-    @Column(name = "target_sets")
-    private Integer targetSets;
+    // 각도 기준점 3개 (관절 이름) - 프론트에서 좌/우 MoveNet 인덱스로 변환
+    @Column(name = "joint_a")
+    private String jointA;
+    @Column(name = "joint_b")
+    private String jointB;
+    @Column(name = "joint_c")
+    private String jointC;
 
-    @Column(name = "target_reps")
-    private Integer targetReps;
+    @Column(name = "rest_angle")
+    private Integer restAngle;         // 시작 자세 각도
 
-    @Embedded
-    private Feedback feedback;
+    @Column(name = "normal_target")
+    private Integer normalTarget;      // 정상 목표 각도 (화면에 목표로 표시)
 
-    @OneToMany(mappedBy = "exercise", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<Joint> joints = new ArrayList<>();
+    @Column(name = "allowed_target")
+    private Integer allowedTarget;     // 허용 목표 각도 (실제 성공 판정 기준)
 
-    public void addJoint(Joint joint) {
-        joints.add(joint);
-        joint.setExercise(this);
-    }
+    @Column(length = 500)
+    private String notes;              // 주의사항·특수처리 메모
 }

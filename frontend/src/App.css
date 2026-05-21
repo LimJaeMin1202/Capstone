@@ -73,6 +73,147 @@
   color: var(--primary-dark);
 }
 
+.navbar-user {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 8px;
+  align-self: center;
+}
+
+.logout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: var(--surface-alt);
+  color: var(--danger);
+}
+
+/* ===== 로그인/회원가입 ===== */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hover);
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-brand {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-brand .logo {
+  font-size: 1.8rem;
+}
+
+.auth-tabs {
+  display: flex;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  padding: 5px;
+  gap: 4px;
+  margin: 24px 0;
+}
+
+.auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.auth-tab.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-field input {
+  font-family: inherit;
+  font-size: 1.05rem;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.auth-error {
+  color: var(--danger);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.auth-submit {
+  background: var(--primary);
+  border: none;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+
 /* ===== 페이지 헤더 ===== */
 .page-title {
   font-size: 1.8rem;

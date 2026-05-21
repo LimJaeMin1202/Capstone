@@ -4,12 +4,15 @@ import type { SessionStats } from "./components/PoseDetector";
 import ExerciseSelect from "./components/ExerciseSelect";
 import ExerciseScreen from "./components/ExerciseScreen";
 import RecordsScreen from "./components/RecordsScreen";
+import AuthPage from "./components/AuthPage";
 import { saveRecord } from "./api/records";
+import { useAuth } from "./auth/AuthContext";
 import "./App.css";
 
 type View = "select" | "exercise" | "records";
 
 function App() {
+  const { user, loading, logout } = useAuth();
   const [view, setView] = useState<View>("select");
   const [selected, setSelected] = useState<Exercise | null>(null);
 
@@ -28,6 +31,22 @@ function App() {
   function goSelect() {
     setSelected(null);
     setView("select");
+  }
+
+  // 로그인 상태 복원 중
+  if (loading) {
+    return (
+      <div className="app">
+        <p className="state-msg" style={{ padding: 40 }}>
+          불러오는 중...
+        </p>
+      </div>
+    );
+  }
+
+  // 미로그인 → 로그인/회원가입 화면
+  if (!user) {
+    return <AuthPage />;
   }
 
   return (
@@ -53,6 +72,10 @@ function App() {
               }}
             >
               기록 보기
+            </button>
+            <span className="navbar-user">{user.name}님</span>
+            <button className="logout-btn" onClick={logout}>
+              로그아웃
             </button>
           </nav>
         </div>

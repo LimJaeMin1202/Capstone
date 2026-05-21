@@ -73,20 +73,34 @@ export function judgeLevel(angle: number, ex: Exercise): Level {
   }
 }
 
-// 양쪽 중 가장 잘한 쪽을 대표로 반환 (한쪽 운동·양쪽 운동 모두 대응)
-export function analyzePose(
-  kp: Keypoint[],
-  ex: Exercise
-): SideResult | null {
-  const results: SideResult[] = [];
+export interface PoseAnalysis {
+  left: SideResult | null;
+  right: SideResult | null;
+  best: SideResult | null; // 판정·카운트용 (더 잘한 쪽)
+}
+
+// 양쪽 각각의 결과 + 대표(best) 반환
+export function analyzePose(kp: Keypoint[], ex: Exercise): PoseAnalysis {
+  const sides: Record<"left" | "right", SideResult | null> = {
+    left: null,
+    right: null,
+  };
   for (const side of ["left", "right"] as const) {
     const angle = angleForSide(kp, ex, side);
     if (angle !== null) {
-      results.push({ side, angle, level: judgeLevel(angle, ex) });
+      sides[side] = { side, angle, level: judgeLevel(angle, ex) };
     }
   }
-  if (results.length === 0) return null;
+
   const rank: Record<Level, number> = { perfect: 2, success: 1, fail: 0 };
-  results.sort((a, b) => rank[b.level] - rank[a.level]);
-  return results[0];
+  const candidates = [sides.left, sides.right].filter(
+    (s): s is SideResult => s !== null
+  );
+  candidates.sort((a, b) => rank[b.level] - rank[a.level]);
+
+  return {
+    left: sides.left,
+    right: sides.right,
+    best: candidates[0] ?? null,
+  };
 }

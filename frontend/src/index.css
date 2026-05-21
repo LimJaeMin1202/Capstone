@@ -1,6 +1,36 @@
 :root {
-  font-family: system-ui, "Segoe UI", "Noto Sans KR", sans-serif;
-  color-scheme: dark;
+  /* 색상 — 심신 안정을 주는 세이지 그린 / 자연 톤 */
+  --bg-gradient: linear-gradient(180deg, #eaf2ec 0%, #dfe9e2 100%);
+  --surface: #ffffff;
+  --surface-alt: #f1f6f2;
+  --text: #2a3531;
+  --text-muted: #61706a;
+  --primary: #4a9d84;
+  --primary-dark: #357a64;
+  --primary-soft: #e1efe9;
+  --border: #d8e3dc;
+  --shadow: 0 4px 16px rgba(42, 53, 49, 0.08);
+  --shadow-hover: 0 10px 26px rgba(42, 53, 49, 0.14);
+  --radius: 16px;
+
+  /* 피드백 */
+  --success: #1e9e54;
+  --warn: #e08600;
+  --danger: #d8453b;
+
+  /* 난이도별 색 */
+  --lv-beginner: #2e8b57;
+  --lv-beginner-soft: #e2f3ea;
+  --lv-intermediate: #c47d00;
+  --lv-intermediate-soft: #fbf0d6;
+  --lv-advanced: #c4453c;
+  --lv-advanced-soft: #fae6e4;
+
+  font-family: "Pretendard", system-ui, "Noto Sans KR", sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -9,10 +39,23 @@
 
 body {
   margin: 0;
-  background: #1a1a2e;
-  color: #ffffff;
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text);
 }
 
 #root {
   min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+button {
+  font-family: inherit;
 }

@@ -18,8 +18,15 @@ const MIN_SCORE = 0.3;
 const HOLD_MS = 800; // 정자세 유지해야 하는 시간
 const COOLDOWN_MS = 1500; // 카운트 후 쿨다운
 
+export interface SessionStats {
+  goodCount: number;
+  duration: number;
+  accuracy: number;
+}
+
 interface Props {
   exercise: Exercise;
+  onComplete: (stats: SessionStats) => void;
 }
 
 interface Feedback {
@@ -27,7 +34,7 @@ interface Feedback {
   color: string;
 }
 
-export default function PoseDetector({ exercise }: Props) {
+export default function PoseDetector({ exercise, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
@@ -39,15 +46,20 @@ export default function PoseDetector({ exercise }: Props) {
   const startTimeRef = useRef<number>(0);
   const countRef = useRef<number>(0);
 
+  // 정확도 계산용 (올바른 자세 프레임 / 전체 프레임)
+  const totalFramesRef = useRef<number>(0);
+  const goodFramesRef = useRef<number>(0);
+
   // UI 안정화용
-  const angleEmaRef = useRef<number | null>(null); // 각도 평활화
+  const leftEmaRef = useRef<number | null>(null); // 왼쪽 각도 평활화
+  const rightEmaRef = useRef<number | null>(null); // 오른쪽 각도 평활화
   const lastUiRef = useRef<number>(0); // 마지막 화면 갱신 시각
   const lastMsgRef = useRef<string>(""); // 마지막 피드백 메시지 (중복 방지)
 
   const [status, setStatus] = useState("모델 로딩 중...");
   const [feedback, setFeedback] = useState<Feedback>({
     msg: "운동을 시작해보세요",
-    color: "white",
+    color: "#2f9e8f",
   });
   const [count, setCount] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -112,33 +124,49 @@ export default function PoseDetector({ exercise }: Props) {
     // 화면 갱신은 약 0.4초마다만 (어르신 가독성 위해 깜빡임 최소화)
     const UI_INTERVAL_MS = 400;
 
+    const smooth = (prev: number | null, cur: number) =>
+      prev === null ? cur : prev * 0.7 + cur * 0.3;
+
     function judge(keypoints: poseDetection.Keypoint[]) {
       const now = Date.now();
-      const result = analyzePose(keypoints, exercise);
+      const { left, right, best } = analyzePose(keypoints, exercise);
 
-      // 표시할 메시지·색·각도 결정
       let msg: string;
       let color: string;
       let angleStr: string;
 
-      if (!result) {
+      if (!best) {
         msg = "카메라에 몸 전체가 보이게 해주세요";
-        color = "#ffb300";
+        color = "#e08600";
         angleStr = "-";
         goodStartRef.current = null;
-        angleEmaRef.current = null;
+        leftEmaRef.current = null;
+        rightEmaRef.current = null;
       } else {
-        // 각도 평활화 (지수이동평균) — 떨림 제거
-        const smoothed =
-          angleEmaRef.current === null
-            ? result.angle
-            : angleEmaRef.current * 0.7 + result.angle * 0.3;
-        angleEmaRef.current = smoothed;
-        const shownAngle = Math.round(smoothed);
-        angleStr = `${result.side === "left" ? "왼쪽" : "오른쪽"} ${shownAngle}°`;
+        // 좌/우 각각 평활화해서 따로 표시 (왔다갔다 안 함)
+        let leftStr = "";
+        let rightStr = "";
+        if (left) {
+          leftEmaRef.current = smooth(leftEmaRef.current, left.angle);
+          leftStr = `왼 ${Math.round(leftEmaRef.current)}°`;
+        } else {
+          leftEmaRef.current = null;
+        }
+        if (right) {
+          rightEmaRef.current = smooth(rightEmaRef.current, right.angle);
+          rightStr = `오른 ${Math.round(rightEmaRef.current)}°`;
+        } else {
+          rightEmaRef.current = null;
+        }
+        angleStr = [leftStr, rightStr].filter(Boolean).join("   ") || "-";
 
-        const ok = result.level === "success" || result.level === "perfect";
+        // 판정·카운트는 더 잘한 쪽(best) 기준
+        const ok = best.level === "success" || best.level === "perfect";
         const cooldownOver = now - lastCountRef.current > COOLDOWN_MS;
+
+        // 정확도용 프레임 집계
+        totalFramesRef.current += 1;
+        if (ok) goodFramesRef.current += 1;
 
         if (ok) {
           if (!goodStartRef.current) goodStartRef.current = now;
@@ -149,17 +177,17 @@ export default function PoseDetector({ exercise }: Props) {
             lastCountRef.current = now;
             goodStartRef.current = null;
           }
-          if (result.level === "perfect") {
+          if (best.level === "perfect") {
             msg = "🎉 완벽해요!";
-            color = "#00e676";
+            color = "#1e9e54";
           } else {
             msg = "👍 좋아요! 그대로 유지";
-            color = "#8bc34a";
+            color = "#3aa564";
           }
         } else {
           goodStartRef.current = null;
           msg = "조금만 더 움직여보세요";
-          color = "#ff5252";
+          color = "#d8453b";
         }
       }
 
@@ -224,58 +252,40 @@ export default function PoseDetector({ exercise }: Props) {
     };
   }, [exercise]);
 
+  function handleFinish() {
+    const duration = startTimeRef.current
+      ? Math.floor((Date.now() - startTimeRef.current) / 1000)
+      : 0;
+    const total = totalFramesRef.current;
+    const accuracy = total > 0 ? Math.round((goodFramesRef.current / total) * 100) : 0;
+    onComplete({ goodCount: countRef.current, duration, accuracy });
+  }
+
   return (
-    <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-      <div>
-        <p style={{ color: "#aaa", marginBottom: 8 }}>{status}</p>
-        <div style={{ position: "relative", width: VIDEO_WIDTH, height: VIDEO_HEIGHT }}>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            width={VIDEO_WIDTH}
-            height={VIDEO_HEIGHT}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              transform: "scaleX(-1)",
-              borderRadius: 12,
-            }}
-          />
+    <div className="pose-area">
+      <div className="pose-video-col">
+        <p className="pose-status">{status}</p>
+        <div className="video-wrap">
+          <video ref={videoRef} autoPlay playsInline className="cam-video" />
           <canvas
             ref={canvasRef}
             width={VIDEO_WIDTH}
             height={VIDEO_HEIGHT}
-            style={{ position: "absolute", top: 0, left: 0, zIndex: 10 }}
+            className="cam-canvas"
           />
         </div>
       </div>
 
-      {/* 사이드 패널 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 200 }}>
-        <div
-          style={{
-            background: "#16213e",
-            border: "2px solid #0f3460",
-            borderRadius: 12,
-            padding: 20,
-            fontSize: "1.5rem",
-            fontWeight: "bold",
-            textAlign: "center",
-            color: feedback.color,
-            minHeight: 80,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "color 0.3s",
-          }}
-        >
+      <div className="pose-panel">
+        <div className="feedback-box" style={{ background: feedback.color }}>
           {feedback.msg}
         </div>
         <InfoBox value={String(count)} label="✅ 정확한 자세 횟수" />
         <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
         <InfoBox value={angleText} label="📐 현재 각도" />
+        <button className="finish-btn" onClick={handleFinish}>
+          운동 완료 & 기록 저장
+        </button>
       </div>
     </div>
   );
@@ -283,19 +293,9 @@ export default function PoseDetector({ exercise }: Props) {
 
 function InfoBox({ value, label }: { value: string; label: string }) {
   return (
-    <div
-      style={{
-        background: "#16213e",
-        border: "1px solid #0f3460",
-        borderRadius: 12,
-        padding: 16,
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00e5ff" }}>
-        {value}
-      </div>
-      <div style={{ fontSize: "0.9rem", color: "#aaa", marginTop: 4 }}>{label}</div>
+    <div className="info-box">
+      <div className="info-value">{value}</div>
+      <div className="info-label">{label}</div>
     </div>
   );
 }

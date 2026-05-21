@@ -1,11 +1,429 @@
+/* ===== 레이아웃 ===== */
 .app {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 32px 16px;
 }
 
-.app h1 {
+.main {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  flex: 1;
+}
+
+/* ===== 상단 네비게이션 ===== */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.navbar-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.navbar-brand .logo {
   font-size: 1.6rem;
+}
+
+.navbar-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-link:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.nav-link.active {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+/* ===== 페이지 헤더 ===== */
+.page-title {
+  font-size: 1.8rem;
+  margin-bottom: 6px;
+}
+
+.page-sub {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  margin: 0 0 28px;
+}
+
+/* ===== 운동 선택 ===== */
+.category-section {
+  margin-bottom: 36px;
+}
+
+.category-title {
+  font-size: 1.25rem;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-title::before {
+  content: "";
+  width: 6px;
+  height: 22px;
+  background: var(--primary);
+  border-radius: 3px;
+}
+
+.exercise-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.exercise-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exercise-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--primary);
+}
+
+.exercise-card-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exercise-card-part {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.exercise-card-badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 999px;
+}
+
+.exercise-card-badge.lv-beginner {
+  color: var(--lv-beginner);
+  background: var(--lv-beginner-soft);
+}
+
+.exercise-card-badge.lv-intermediate {
+  color: var(--lv-intermediate);
+  background: var(--lv-intermediate-soft);
+}
+
+.exercise-card-badge.lv-advanced {
+  color: var(--lv-advanced);
+  background: var(--lv-advanced-soft);
+}
+
+/* 정렬/그룹 전환 바 */
+.sort-bar {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.sort-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sort-btn:hover {
+  color: var(--text);
+}
+
+.sort-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ===== 운동 화면 ===== */
+.exercise-detail {
+  width: 100%;
+}
+
+.back-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
   margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.back-btn:hover {
+  background: var(--surface-alt);
+}
+
+.exercise-title {
+  font-size: 1.6rem;
+  margin-bottom: 6px;
+}
+
+.exercise-meta {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin: 0 0 20px;
+}
+
+.exercise-note {
+  background: var(--warn-soft);
+  border-radius: 12px;
+  padding: 14px 18px;
+  color: #8a5a00;
+  font-size: 1rem;
+  margin-top: 16px;
+}
+
+/* ===== 영상 + 패널 ===== */
+.pose-area {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.pose-video-col {
+  flex: 0 1 640px;
+  min-width: 0;
+}
+
+.pose-status {
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 4 / 3;
+  background: #0a1020;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.cam-video,
+.cam-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cam-video {
+  transform: scaleX(-1);
+  object-fit: cover;
+}
+
+.cam-canvas {
+  z-index: 10;
+}
+
+.pose-panel {
+  flex: 1 1 260px;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.feedback-box {
+  border-radius: var(--radius);
+  padding: 24px 16px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  transition: background 0.3s;
+}
+
+.info-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.info-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
+.info-label {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.finish-btn {
+  background: var(--primary);
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.15rem;
+  padding: 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 4px;
+  box-shadow: var(--shadow);
+  transition: background 0.15s;
+}
+
+.finish-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* ===== 기록 ===== */
+.records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 600px;
+}
+
+.record-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.record-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.record-date {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.record-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.record-stats b {
+  color: var(--primary-dark);
+  font-size: 1.1rem;
+}
+
+.record-bar {
+  height: 10px;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.record-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.4s;
+}
+
+.empty-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  padding: 60px 20px;
+}
+
+.state-msg {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+.state-msg.error {
+  color: var(--danger);
 }

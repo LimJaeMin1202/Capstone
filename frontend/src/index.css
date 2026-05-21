@@ -1,0 +1,18 @@
+:root {
+  font-family: system-ui, "Segoe UI", "Noto Sans KR", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #1a1a2e;
+  color: #ffffff;
+}
+
+#root {
+  min-height: 100vh;
+}

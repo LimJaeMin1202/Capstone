@@ -7,8 +7,13 @@ import java.util.List;
 
 public interface ExerciseRecordRepository extends JpaRepository<ExerciseRecord, Long> {
 
-    // 특정 운동의 기록만 조회 (메소드 이름만 잘 지으면 SQL 자동 생성됨!)
-    List<ExerciseRecord> findByExerciseIdOrderByCreatedAtDesc(String exerciseId);
+    // 특정 사용자의 기록 (최신순)
+    List<ExerciseRecord> findByUser_UsernameOrderByCreatedAtDesc(String username);
 
-    List<ExerciseRecord> findAllByOrderByCreatedAtDesc();
+    // 특정 사용자의 특정 운동 기록
+    List<ExerciseRecord> findByUser_UsernameAndExerciseIdOrderByCreatedAtDesc(
+            String username, String exerciseId);
+
+    // 특정 사용자의 기록 전체 삭제
+    void deleteByUser_Username(String username);
 }

@@ -1,5 +1,6 @@
 import type { Exercise } from "../types/exercise";
 import PoseDetector, { type SessionStats } from "./PoseDetector";
+import ExerciseImage from "./ExerciseImage";
 
 interface Props {
   exercise: Exercise;
@@ -20,13 +21,30 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
         {exercise.allowedTarget}°)
       </p>
 
+      <div className="exercise-guide">
+        <div className="exercise-guide-img">
+          <ExerciseImage
+            exerciseId={exercise.id}
+            category={exercise.category}
+          />
+        </div>
+        <div className="exercise-guide-text">
+          <h3>운동 방법</h3>
+          {exercise.notes ? (
+            <p>{exercise.notes}</p>
+          ) : (
+            <p style={{ color: "var(--text-muted)" }}>
+              카메라 앞에 서서 천천히 동작을 따라해보세요.
+            </p>
+          )}
+        </div>
+      </div>
+
       <PoseDetector
         key={exercise.id}
         exercise={exercise}
         onComplete={onComplete}
       />
-
-      {exercise.notes && <p className="exercise-note">💡 {exercise.notes}</p>}
     </div>
   );
 }

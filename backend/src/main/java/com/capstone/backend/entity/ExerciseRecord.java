@@ -1,5 +1,6 @@
 package com.capstone.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,6 +37,12 @@ public class ExerciseRecord {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // 이 기록의 주인 (서버에서 로그인 사용자로 설정)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    @JsonIgnore
+    private User user;
 
     @PrePersist
     public void prePersist() {

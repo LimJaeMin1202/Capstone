@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Exercise } from "../types/exercise";
 import { fetchExercises } from "../api/exercises";
+import ExerciseImage from "./ExerciseImage";
 
 interface Props {
   onSelect: (exercise: Exercise) => void;
@@ -136,6 +137,12 @@ export default function ExerciseSelect({ onSelect }: Props) {
                 className="exercise-card"
                 onClick={() => onSelect(ex)}
               >
+                <div className="exercise-card-thumb">
+                  <ExerciseImage
+                    exerciseId={ex.id}
+                    category={ex.category}
+                  />
+                </div>
                 <span className="exercise-card-name">{ex.name}</span>
                 <span className="exercise-card-part">{ex.bodyPart}</span>
                 <span

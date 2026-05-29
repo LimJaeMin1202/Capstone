@@ -4,17 +4,24 @@ import type { SessionStats } from "./components/PoseDetector";
 import ExerciseSelect from "./components/ExerciseSelect";
 import ExerciseScreen from "./components/ExerciseScreen";
 import RecordsScreen from "./components/RecordsScreen";
+import ResultScreen from "./components/ResultScreen";
 import AuthPage from "./components/AuthPage";
 import { saveRecord } from "./api/records";
 import { useAuth } from "./auth/AuthContext";
 import "./App.css";
 
-type View = "select" | "exercise" | "records";
+type View = "select" | "exercise" | "result" | "records";
+
+interface LastResult {
+  exercise: Exercise;
+  stats: SessionStats;
+}
 
 function App() {
   const { user, loading, logout } = useAuth();
   const [view, setView] = useState<View>("select");
   const [selected, setSelected] = useState<Exercise | null>(null);
+  const [lastResult, setLastResult] = useState<LastResult | null>(null);
 
   async function handleComplete(stats: SessionStats) {
     if (selected) {
@@ -23,17 +30,24 @@ function App() {
       } catch (err) {
         alert("기록 저장 실패: " + (err as Error).message);
       }
+      setLastResult({ exercise: selected, stats });
     }
     setSelected(null);
-    setView("records");
+    setView("result");
   }
 
   function goSelect() {
     setSelected(null);
+    setLastResult(null);
     setView("select");
   }
 
-  // 로그인 상태 복원 중
+  function goRecords() {
+    setSelected(null);
+    setLastResult(null);
+    setView("records");
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -44,7 +58,6 @@ function App() {
     );
   }
 
-  // 미로그인 → 로그인/회원가입 화면
   if (!user) {
     return <AuthPage />;
   }
@@ -59,17 +72,18 @@ function App() {
           </div>
           <nav className="navbar-nav">
             <button
-              className={view !== "records" ? "nav-link active" : "nav-link"}
+              className={
+                view === "select" || view === "exercise" || view === "result"
+                  ? "nav-link active"
+                  : "nav-link"
+              }
               onClick={goSelect}
             >
               운동하기
             </button>
             <button
               className={view === "records" ? "nav-link active" : "nav-link"}
-              onClick={() => {
-                setSelected(null);
-                setView("records");
-              }}
+              onClick={goRecords}
             >
               기록 보기
             </button>
@@ -102,6 +116,15 @@ function App() {
             exercise={selected}
             onBack={goSelect}
             onComplete={handleComplete}
+          />
+        )}
+
+        {view === "result" && lastResult && (
+          <ResultScreen
+            exercise={lastResult.exercise}
+            stats={lastResult.stats}
+            onAnother={goSelect}
+            onRecords={goRecords}
           />
         )}
 

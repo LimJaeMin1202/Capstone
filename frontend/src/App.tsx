@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Exercise } from "./types/exercise";
 import type { SessionStats } from "./components/PoseDetector";
 import ExerciseSelect from "./components/ExerciseSelect";
@@ -17,11 +17,25 @@ interface LastResult {
   stats: SessionStats;
 }
 
+// 어르신 친화 글씨 크기 설정
+const FONT_SIZES = { small: "16px", normal: "18px", large: "22px" } as const;
+type FontSize = keyof typeof FONT_SIZES;
+
 function App() {
   const { user, loading, logout } = useAuth();
   const [view, setView] = useState<View>("select");
   const [selected, setSelected] = useState<Exercise | null>(null);
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
+
+  // 글씨 크기 (localStorage에 저장, 로그인 전후 모두 적용)
+  const [fontSize, setFontSize] = useState<FontSize>(
+    () => (localStorage.getItem("font-size") as FontSize) || "normal"
+  );
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = FONT_SIZES[fontSize];
+    localStorage.setItem("font-size", fontSize);
+  }, [fontSize]);
 
   async function handleComplete(stats: SessionStats) {
     if (selected) {
@@ -87,6 +101,28 @@ function App() {
             >
               기록 보기
             </button>
+
+            <div className="font-toggle" title="글씨 크기">
+              <button
+                className={fontSize === "small" ? "fs-btn active" : "fs-btn"}
+                onClick={() => setFontSize("small")}
+              >
+                작게
+              </button>
+              <button
+                className={fontSize === "normal" ? "fs-btn active" : "fs-btn"}
+                onClick={() => setFontSize("normal")}
+              >
+                보통
+              </button>
+              <button
+                className={fontSize === "large" ? "fs-btn active" : "fs-btn"}
+                onClick={() => setFontSize("large")}
+              >
+                크게
+              </button>
+            </div>
+
             <span className="navbar-user">{user.name}님</span>
             <button className="logout-btn" onClick={logout}>
               로그아웃

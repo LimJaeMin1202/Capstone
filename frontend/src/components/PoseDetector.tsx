@@ -15,8 +15,11 @@ const CONNECTIONS: [number, number][] = [
 const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
 const MIN_SCORE = 0.3;
-const HOLD_MS = 800; // 정자세 유지해야 하는 시간
-const COOLDOWN_MS = 1500; // 카운트 후 쿨다운
+const HOLD_MS = 800;
+const COOLDOWN_MS = 1500;
+const COUNTDOWN_START = 3;
+
+type Phase = "loading" | "ready" | "countdown" | "exercising";
 
 export interface SessionStats {
   goodCount: number;
@@ -40,30 +43,41 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // 타이밍·카운트 (리렌더 무관하게 ref로 관리)
+  // 타이밍·카운트
   const goodStartRef = useRef<number | null>(null);
   const lastCountRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const countRef = useRef<number>(0);
 
-  // 정확도 계산용 (올바른 자세 프레임 / 전체 프레임)
+  // 정확도
   const totalFramesRef = useRef<number>(0);
   const goodFramesRef = useRef<number>(0);
 
-  // UI 안정화용
-  const leftEmaRef = useRef<number | null>(null); // 왼쪽 각도 평활화
-  const rightEmaRef = useRef<number | null>(null); // 오른쪽 각도 평활화
-  const lastUiRef = useRef<number>(0); // 마지막 화면 갱신 시각
-  const lastMsgRef = useRef<string>(""); // 마지막 피드백 메시지 (중복 방지)
+  // UI 안정화
+  const leftEmaRef = useRef<number | null>(null);
+  const rightEmaRef = useRef<number | null>(null);
+  const lastUiRef = useRef<number>(0);
+  const lastMsgRef = useRef<string>("");
+
+  // 단계 관리 (detectLoop 클로저에서 보려고 ref 함께 관리)
+  const [phase, setPhase] = useState<Phase>("loading");
+  const phaseRef = useRef<Phase>("loading");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownIntervalRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState("모델 로딩 중...");
   const [feedback, setFeedback] = useState<Feedback>({
-    msg: "운동을 시작해보세요",
+    msg: "AI가 준비되면 시작 버튼이 나타나요",
     color: "#2f9e8f",
   });
   const [count, setCount] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [angleText, setAngleText] = useState("-");
+
+  // phase 변경 시 ref 동기화 (detectLoop 클로저용)
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,9 +107,15 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
           return;
         }
         detectorRef.current = detector;
-        setStatus("✅ 준비 완료! 카메라 앞에 서보세요");
 
-        startTimeRef.current = Date.now();
+        // 준비 완료 → 시작 버튼 보이기
+        setPhase("ready");
+        setStatus("✅ 준비 완료! 카메라 앞에 서서 시작 버튼을 누르세요");
+        setFeedback({
+          msg: "시작 버튼을 누르면 운동이 시작돼요",
+          color: "#2f9e8f",
+        });
+
         detectLoop();
       } catch (err) {
         setStatus("❌ 오류: " + (err as Error).message);
@@ -115,13 +135,15 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
         if (poses.length > 0) {
           const kp = poses[0].keypoints;
           drawSkeleton(ctx, kp);
-          judge(kp);
+          // 운동 중일 때만 판정·카운트
+          if (phaseRef.current === "exercising") {
+            judge(kp);
+          }
         }
       }
       rafRef.current = requestAnimationFrame(detectLoop);
     }
 
-    // 화면 갱신은 약 0.4초마다만 (어르신 가독성 위해 깜빡임 최소화)
     const UI_INTERVAL_MS = 400;
 
     const smooth = (prev: number | null, cur: number) =>
@@ -143,7 +165,6 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
         leftEmaRef.current = null;
         rightEmaRef.current = null;
       } else {
-        // 좌/우 각각 평활화해서 따로 표시 (왔다갔다 안 함)
         let leftStr = "";
         let rightStr = "";
         if (left) {
@@ -160,11 +181,9 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
         }
         angleStr = [leftStr, rightStr].filter(Boolean).join("   ") || "-";
 
-        // 판정·카운트는 더 잘한 쪽(best) 기준
         const ok = best.level === "success" || best.level === "perfect";
         const cooldownOver = now - lastCountRef.current > COOLDOWN_MS;
 
-        // 정확도용 프레임 집계
         totalFramesRef.current += 1;
         if (ok) goodFramesRef.current += 1;
 
@@ -173,7 +192,7 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
           const heldLong = now - goodStartRef.current > HOLD_MS;
           if (heldLong && cooldownOver) {
             countRef.current += 1;
-            setCount(countRef.current); // 카운트는 즉시 반영 (성취감)
+            setCount(countRef.current);
             lastCountRef.current = now;
             goodStartRef.current = null;
           }
@@ -191,7 +210,6 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
         }
       }
 
-      // throttle: 0.4초마다만 화면 갱신, 메시지는 바뀔 때만
       if (now - lastUiRef.current >= UI_INTERVAL_MS) {
         lastUiRef.current = now;
         setAngleText(angleStr);
@@ -234,7 +252,7 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
 
     init();
 
-    // 운동 시간 타이머
+    // 운동 시간 타이머 (startTimeRef가 0이면 안 돌아감)
     const timer = setInterval(() => {
       if (startTimeRef.current) {
         setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -244,6 +262,9 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
     return () => {
       cancelled = true;
       clearInterval(timer);
+      if (countdownIntervalRef.current) {
+        window.clearInterval(countdownIntervalRef.current);
+      }
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       const stream = videoRef.current?.srcObject as MediaStream | null;
       stream?.getTracks().forEach((track) => track.stop());
@@ -252,12 +273,46 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
     };
   }, [exercise]);
 
+  // 시작 버튼 → 3-2-1 카운트다운 → 운동 시작
+  function handleStart() {
+    setPhase("countdown");
+    let n = COUNTDOWN_START;
+    setCountdown(n);
+
+    const id = window.setInterval(() => {
+      n -= 1;
+      if (n <= 0) {
+        window.clearInterval(id);
+        countdownIntervalRef.current = null;
+
+        // 모든 통계 초기화 후 운동 시작
+        startTimeRef.current = Date.now();
+        countRef.current = 0;
+        setCount(0);
+        goodFramesRef.current = 0;
+        totalFramesRef.current = 0;
+        goodStartRef.current = null;
+        lastCountRef.current = 0;
+        lastMsgRef.current = "";
+
+        setCountdown(null);
+        setPhase("exercising");
+        setStatus("운동 중");
+        setFeedback({ msg: "자, 시작해볼까요!", color: "#3aa564" });
+      } else {
+        setCountdown(n);
+      }
+    }, 1000);
+    countdownIntervalRef.current = id;
+  }
+
   function handleFinish() {
     const duration = startTimeRef.current
       ? Math.floor((Date.now() - startTimeRef.current) / 1000)
       : 0;
     const total = totalFramesRef.current;
-    const accuracy = total > 0 ? Math.round((goodFramesRef.current / total) * 100) : 0;
+    const accuracy =
+      total > 0 ? Math.round((goodFramesRef.current / total) * 100) : 0;
     onComplete({ goodCount: countRef.current, duration, accuracy });
   }
 
@@ -273,6 +328,24 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
             height={VIDEO_HEIGHT}
             className="cam-canvas"
           />
+
+          {/* 준비 완료 → 시작 버튼 오버레이 */}
+          {phase === "ready" && (
+            <div className="video-overlay">
+              <button className="start-btn" onClick={handleStart}>
+                ▶ 운동 시작
+              </button>
+            </div>
+          )}
+
+          {/* 카운트다운 오버레이 */}
+          {phase === "countdown" && countdown !== null && (
+            <div className="video-overlay">
+              <div key={countdown} className="countdown-num">
+                {countdown}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -283,9 +356,11 @@ export default function PoseDetector({ exercise, onComplete }: Props) {
         <InfoBox value={String(count)} label="✅ 정확한 자세 횟수" />
         <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
         <InfoBox value={angleText} label="📐 현재 각도" />
-        <button className="finish-btn" onClick={handleFinish}>
-          운동 완료 & 기록 저장
-        </button>
+        {phase === "exercising" && (
+          <button className="finish-btn" onClick={handleFinish}>
+            운동 완료 & 기록 저장
+          </button>
+        )}
       </div>
     </div>
   );

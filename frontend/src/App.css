@@ -541,6 +541,59 @@
   z-index: 10;
 }
 
+/* 시작 버튼 / 카운트다운 오버레이 */
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius);
+}
+
+.start-btn {
+  font-size: 1.6rem;
+  font-weight: 800;
+  padding: 20px 48px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-hover);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.start-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.05);
+}
+
+.countdown-num {
+  font-size: 9rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+  animation: countdown-pop 1s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .pose-panel {
   flex: 1 1 260px;
   max-width: 340px;

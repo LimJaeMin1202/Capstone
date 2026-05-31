@@ -38,7 +38,7 @@ export default function AuthPage() {
     <div className="auth-wrap">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="logo">🦵</span> 건강한 우리 운동
+          <img src="/icon.png" alt="CareFit" className="auth-brand-logo" />
         </div>
 
         <div className="auth-tabs">

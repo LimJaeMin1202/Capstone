@@ -62,6 +62,14 @@ function App() {
     setView("records");
   }
 
+  // 로그아웃 시 화면 상태도 홈으로 초기화 (다음 로그인 시 홈에서 시작)
+  function handleLogout() {
+    setView("select");
+    setSelected(null);
+    setLastResult(null);
+    logout();
+  }
+
   if (loading) {
     return (
       <div className="app">
@@ -80,10 +88,14 @@ function App() {
     <div className="app">
       <header className="navbar">
         <div className="navbar-inner">
-          <div className="navbar-brand">
-            <span className="logo">🦵</span>
-            건강한 우리 운동
-          </div>
+          <button
+            type="button"
+            className="navbar-brand"
+            onClick={goSelect}
+            aria-label="홈으로"
+          >
+            <img src="/icon.png" alt="CareFit" className="brand-logo" />
+          </button>
           <nav className="navbar-nav">
             <button
               className={
@@ -124,7 +136,7 @@ function App() {
             </div>
 
             <span className="navbar-user">{user.name}님</span>
-            <button className="logout-btn" onClick={logout}>
+            <button className="logout-btn" onClick={handleLogout}>
               로그아웃
             </button>
           </nav>

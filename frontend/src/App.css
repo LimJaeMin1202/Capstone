@@ -36,14 +36,22 @@
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.15s;
 }
 
-.navbar-brand .logo {
-  font-size: 1.6rem;
+.navbar-brand:hover {
+  opacity: 0.8;
+}
+
+.brand-logo {
+  height: 70px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .navbar-nav {
@@ -146,17 +154,16 @@
 }
 
 .auth-brand {
-  font-size: 1.5rem;
-  font-weight: 800;
-  text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
 }
 
-.auth-brand .logo {
-  font-size: 1.8rem;
+.auth-brand-logo {
+  height: 90px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .auth-tabs {

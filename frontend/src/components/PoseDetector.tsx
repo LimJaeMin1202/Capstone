@@ -20,6 +20,10 @@ const COUNTDOWN_START = 3;
 // 자세 진입/이탈 시 노이즈 방지용 짧은 그레이스 윈도우
 // 0.3초 동안 자세가 흔들려도 같은 phase 유지 (한두 프레임 노이즈 흡수)
 const PHASE_GRACE_MS = 300;
+// satisfied 상태에서 자세가 "정말로" 풀린 걸 확정하는 데 필요한 시간
+// 이 시간 동안 자세 풀린 상태가 지속되어야 카운트 +1
+// keypoint jitter (한두 프레임 사라짐)로 인한 가짜 카운트 방지
+const RELEASE_CONFIRM_MS = 400;
 
 type Phase = "loading" | "ready" | "countdown" | "exercising";
 
@@ -56,7 +60,7 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
   const repPhaseRef = useRef<RepPhase>("rest");
   const holdStartRef = useRef<number | null>(null); // holding phase 진입 시각
   const lastInPoseRef = useRef<number>(0);          // 마지막으로 자세가 OK였던 시각
-  const lastOutPoseRef = useRef<number>(0);         // 마지막으로 자세가 풀린 시각
+  const releaseStartRef = useRef<number | null>(null); // satisfied에서 자세 풀기 시작한 시각
 
   // ===== 통계 =====
   const startTimeRef = useRef<number>(0);
@@ -173,27 +177,42 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
       let angleStr: string;
       let countdownDisplay: number | null = null;
 
+      // satisfied 상태에서 자세가 "정말" 풀렸는지 시간으로 확정하는 헬퍼
+      // released 가 RELEASE_CONFIRM_MS 만큼 지속되어야 카운트 +1
+      function tryConfirmRelease(): { msg: string; color: string } {
+        if (releaseStartRef.current === null) {
+          releaseStartRef.current = now;
+        }
+        if (now - releaseStartRef.current >= RELEASE_CONFIRM_MS) {
+          countRef.current += 1;
+          setCount(countRef.current);
+          repPhaseRef.current = "rest";
+          holdStartRef.current = null;
+          releaseStartRef.current = null;
+          return {
+            msg: `🎉 ${countRef.current}회 완료! 다음 자세 준비`,
+            color: "#1e9e54",
+          };
+        }
+        return { msg: "잘 했어요. 천천히 풀어주세요", color: "#3aa564" };
+      }
+
       if (!best) {
         angleStr = "-";
         leftEmaRef.current = null;
         rightEmaRef.current = null;
 
-        // satisfied 상태에서 키포인트가 사라짐 = 사용자가 자세를 풀면서
-        // 손목/팔꿈치 등이 무릎·허벅지에 가려진 경우가 대부분.
-        // → 자세 풀린 것으로 보고 카운트 +1
         if (repPhaseRef.current === "satisfied") {
-          countRef.current += 1;
-          setCount(countRef.current);
-          repPhaseRef.current = "rest";
-          holdStartRef.current = null;
-          msg = `🎉 ${countRef.current}회 완료! 다음 자세 준비`;
-          color = "#1e9e54";
+          // 키포인트 사라짐 = 사용자가 자세 풀면서 가려진 것일 가능성 높음
+          // 단, jitter(한두 프레임)로 인한 가짜 카운트 방지 위해 시간 확정
+          const r = tryConfirmRelease();
+          msg = r.msg;
+          color = r.color;
         } else if (repPhaseRef.current === "holding") {
-          // holding 중 키포인트 일시적 손실: phase 유지 (잠시 후 다시 보일 가능성)
+          // holding 중 키포인트 일시적 손실: phase 유지
           msg = "조금만 더 또렷하게 보여주세요";
           color = "#e08600";
         } else {
-          // rest 상태: 그대로 안내
           msg = "카메라에 몸 전체가 보이게 해주세요";
           color = "#e08600";
         }
@@ -222,17 +241,15 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
 
         // 그레이스 윈도우: 자세 한두 프레임 흔들려도 같은 phase 유지
         if (inPose) lastInPoseRef.current = now;
-        else lastOutPoseRef.current = now;
         const recentlyInPose = now - lastInPoseRef.current < PHASE_GRACE_MS;
-        const recentlyOutPose = now - lastOutPoseRef.current < PHASE_GRACE_MS;
 
         const holdMs = holdSecondsRef.current * 1000;
 
         // ===== State machine =====
         switch (repPhaseRef.current) {
           case "rest": {
+            releaseStartRef.current = null;
             if (inPose) {
-              // 자세 진입 → holding 시작
               repPhaseRef.current = "holding";
               holdStartRef.current = now;
               msg = `🟢 자세 잡았어요! ${holdSecondsRef.current}초 유지하세요`;
@@ -245,8 +262,8 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
           }
 
           case "holding": {
+            releaseStartRef.current = null;
             if (inPose || recentlyInPose) {
-              // 아직 자세 유지 중
               const held = now - (holdStartRef.current ?? now);
               if (held >= holdMs) {
                 repPhaseRef.current = "satisfied";
@@ -259,7 +276,6 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
                 color = "#2f9e8f";
               }
             } else {
-              // 그레이스 윈도우 밖 → 자세 풀림 (시간 못 채움)
               repPhaseRef.current = "rest";
               holdStartRef.current = null;
               msg = "조금만 더 유지해보세요";
@@ -269,28 +285,24 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
           }
 
           case "satisfied": {
-            if (!inPose && !recentlyInPose) {
-              // 자세 풀고 휴식 복귀 확인 → 카운트!
-              countRef.current += 1;
-              setCount(countRef.current);
-              repPhaseRef.current = "rest";
-              holdStartRef.current = null;
-              msg = `🎉 ${countRef.current}회 완료! 다음 자세 준비`;
-              color = "#1e9e54";
+            const released = !inPose && !recentlyInPose;
+            if (released) {
+              const r = tryConfirmRelease();
+              msg = r.msg;
+              color = r.color;
             } else {
-              msg = "잘 했어요. 이제 천천히 풀어주세요";
+              // 다시 자세 잡힘 (또는 그레이스 윈도우 내) → release 취소
+              releaseStartRef.current = null;
+              msg = "잘 했어요. 천천히 풀어주세요";
               color = "#3aa564";
             }
             break;
           }
         }
 
-        // 그레이스 윈도우 활용 표시는 만들었으니 holding 중에만 카운트다운 노출
         if (repPhaseRef.current !== "holding") {
           countdownDisplay = null;
         }
-        // 미사용 변수 경고 회피용 — 그레이스 윈도우 추적값
-        void recentlyOutPose;
       }
 
       // UI 업데이트는 일정 간격으로
@@ -377,8 +389,8 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
         // Rep state machine 초기화
         repPhaseRef.current = "rest";
         holdStartRef.current = null;
+        releaseStartRef.current = null;
         lastInPoseRef.current = 0;
-        lastOutPoseRef.current = 0;
         lastMsgRef.current = "";
 
         setCountdown(null);
@@ -444,10 +456,12 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
         <div className="feedback-box" style={{ background: feedback.color }}>
           {feedback.msg}
         </div>
-        <InfoBox value={String(count)} label="✅ 운동 횟수" />
-        <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
-        <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
-        <InfoBox value={angleText} label="📐 현재 각도" />
+        <div className="info-grid">
+          <InfoBox value={String(count)} label="✅ 운동 횟수" />
+          <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
+          <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
+          <InfoBox value={angleText} label="📐 현재 각도" />
+        </div>
         {phase === "exercising" && (
           <button className="finish-btn" onClick={handleFinish}>
             운동 완료 & 기록 저장

@@ -903,12 +903,170 @@
   background: var(--primary-dark);
 }
 
-/* ===== 기록 ===== */
+/* ===== 기록 화면 ===== */
+.records-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 한 줄 피드백 메시지 */
+.records-feedback {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 16px 20px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+/* 상단 4 요약 카드 */
+.records-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .records-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.summary-card-highlight {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border: none;
+  color: #fff;
+}
+
+.summary-card-value {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+  line-height: 1;
+}
+
+.summary-card-highlight .summary-card-value {
+  color: #fff;
+}
+
+.summary-card-unit {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+
+.summary-card-highlight .summary-card-unit {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.summary-card-label {
+  margin-top: 6px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.summary-card-highlight .summary-card-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 섹션 (주간 추세 / 운동별 기록) */
+.records-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.records-section-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 주간 추세 막대그래프 */
+.weekly-bars {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 16px;
+  box-shadow: var(--shadow);
+}
+
+.weekly-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.weekly-bar-track {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.weekly-bar {
+  width: 70%;
+  max-width: 36px;
+  background: var(--primary);
+  border-radius: 8px 8px 4px 4px;
+  transition: height 0.4s;
+  min-height: 4px;
+}
+
+.weekly-bar-today {
+  background: var(--primary-dark);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.weekly-bar-num {
+  position: absolute;
+  top: -22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+
+.weekly-bar-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.weekly-bar-label.today {
+  color: var(--primary-dark);
+  font-weight: 800;
+}
+
+.weekly-bar-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 운동별 카드 리스트 (기존) */
 .records-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 600px;
 }
 
 .record-card {

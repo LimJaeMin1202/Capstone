@@ -23,3 +23,8 @@ server:
 jwt:
   secret: 32자_이상의_본인만의_비밀키_여기에_입력   # HS256은 최소 32바이트 필요
   validity-ms: 86400000   # 토큰 유효시간 (24시간)
+
+# 카카오 로그인 (https://developers.kakao.com 에서 발급)
+kakao:
+  rest-api-key: 카카오_REST_API_키
+  client-secret: 카카오_클라이언트_시크릿

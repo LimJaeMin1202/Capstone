@@ -251,6 +251,54 @@
   cursor: default;
 }
 
+/* ===== 카카오 로그인 ===== */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #d9d2c1;
+}
+
+.kakao-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: #fee500;
+  border: none;
+  color: #191600;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 16px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.kakao-btn:hover:not(:disabled) {
+  background: #fdd835;
+}
+
+.kakao-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.kakao-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
 
 /* ===== 페이지 헤더 ===== */
 .page-title {

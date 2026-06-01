@@ -37,6 +37,19 @@ export async function login(
   return res.json();
 }
 
+export async function kakaoLogin(
+  code: string,
+  redirectUri: string
+): Promise<LoginResult> {
+  const res = await apiFetch("/api/auth/kakao", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirectUri }),
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return res.json();
+}
+
 export async function getMe(): Promise<AuthUser> {
   const res = await apiFetch("/api/auth/me");
   if (!res.ok) throw new Error(await extractError(res));

@@ -1,6 +1,7 @@
 package com.capstone.backend.controller;
 
 import com.capstone.backend.dto.AuthResponse;
+import com.capstone.backend.dto.KakaoLoginRequest;
 import com.capstone.backend.dto.LoginRequest;
 import com.capstone.backend.dto.SignupRequest;
 import com.capstone.backend.dto.UserResponse;
@@ -29,6 +30,12 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
         return authService.login(req);
+    }
+
+    // 카카오 로그인 → JWT 반환 (프론트가 받은 인가코드 + redirectUri 전달)
+    @PostMapping("/kakao")
+    public AuthResponse kakaoLogin(@Valid @RequestBody KakaoLoginRequest req) {
+        return authService.kakaoLogin(req.code(), req.redirectUri());
     }
 
     // 내 정보 (토큰 필요)

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 
 export default function AuthPage() {
-  const { login, signup } = useAuth();
+  const { login, signup, loginWithKakao } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -118,6 +118,29 @@ export default function AuthPage() {
             {busy ? "처리 중..." : mode === "login" ? "로그인" : "회원가입"}
           </button>
         </form>
+
+        <div className="auth-divider">
+          <span>또는</span>
+        </div>
+
+        <button
+          type="button"
+          className="kakao-btn"
+          onClick={loginWithKakao}
+          disabled={busy}
+        >
+          <svg
+            className="kakao-icon"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.756 1.83 5.182 4.594 6.566l-.964 3.534c-.082.299.249.535.51.36l4.226-2.811c.534.07 1.082.108 1.634.108 5.523 0 10-3.477 10-7.757S17.523 3 12 3z" />
+          </svg>
+          카카오로 시작하기
+        </button>
       </div>
     </div>
   );

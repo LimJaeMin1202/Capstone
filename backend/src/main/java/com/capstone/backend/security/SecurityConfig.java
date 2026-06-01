@@ -39,8 +39,8 @@ public class SecurityConfig {
                 // 세션 안 씀 (토큰 기반)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 공개 경로 (회원가입·로그인·운동목록 조회)
-                        .requestMatchers("/api/auth/signup", "/api/auth/login").permitAll()
+                        // 공개 경로 (회원가입·로그인·카카오로그인·운동목록 조회)
+                        .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/kakao").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exercises/**").permitAll()
                         // 나머지는 로그인 필요
                         .anyRequest().authenticated()

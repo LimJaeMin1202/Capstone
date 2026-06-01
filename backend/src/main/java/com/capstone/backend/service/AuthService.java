@@ -19,6 +19,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final KakaoService kakaoService;
 
     @Transactional
     public void signup(SignupRequest req) {
@@ -27,7 +28,7 @@ public class AuthService {
         }
         User user = User.builder()
                 .username(req.username())
-                .password(passwordEncoder.encode(req.password())) // 해시로 저장
+                .password(passwordEncoder.encode(req.password()))
                 .name(req.name())
                 .role("USER")
                 .build();
@@ -39,9 +40,36 @@ public class AuthService {
         User user = userRepository.findByUsername(req.username())
                 .orElseThrow(() -> new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다"));
 
+        // 카카오 가입자는 비밀번호가 없음 → 일반 로그인 차단
+        if (user.getPassword() == null) {
+            throw new IllegalArgumentException("카카오로 가입된 계정입니다. 카카오 로그인을 이용해주세요");
+        }
+
         if (!passwordEncoder.matches(req.password(), user.getPassword())) {
             throw new IllegalArgumentException("아이디 또는 비밀번호가 올바르지 않습니다");
         }
+
+        String token = jwtUtil.generateToken(user.getUsername());
+        return new AuthResponse(token, user.getUsername(), user.getName());
+    }
+
+    // 카카오 로그인: 신규면 자동 가입, 기존이면 로그인 → 우리 JWT 발급
+    @Transactional
+    public AuthResponse kakaoLogin(String code, String redirectUri) {
+        String accessToken = kakaoService.getAccessToken(code, redirectUri);
+        KakaoService.KakaoUserInfo info = kakaoService.getUserInfo(accessToken);
+        String kakaoIdStr = String.valueOf(info.kakaoId());
+
+        User user = userRepository.findByKakaoId(kakaoIdStr)
+                .orElseGet(() -> userRepository.save(
+                        User.builder()
+                                .username("kakao_" + kakaoIdStr)
+                                .password(null) // 카카오 가입자는 비번 없음
+                                .name(info.nickname())
+                                .role("USER")
+                                .kakaoId(kakaoIdStr)
+                                .build()
+                ));
 
         String token = jwtUtil.generateToken(user.getUsername());
         return new AuthResponse(token, user.getUsername(), user.getName());

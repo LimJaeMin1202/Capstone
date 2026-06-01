@@ -4,6 +4,7 @@ import com.capstone.backend.dto.AuthResponse;
 import com.capstone.backend.dto.BirthYearRequest;
 import com.capstone.backend.dto.KakaoLoginRequest;
 import com.capstone.backend.dto.LoginRequest;
+import com.capstone.backend.dto.NameRequest;
 import com.capstone.backend.dto.SignupRequest;
 import com.capstone.backend.dto.UserResponse;
 import com.capstone.backend.service.AuthService;
@@ -52,5 +53,14 @@ public class AuthController {
             @Valid @RequestBody BirthYearRequest req
     ) {
         return authService.updateBirthYear(authentication.getName(), req.birthYear());
+    }
+
+    // 이름 변경
+    @PatchMapping("/me/name")
+    public UserResponse updateName(
+            Authentication authentication,
+            @Valid @RequestBody NameRequest req
+    ) {
+        return authService.updateName(authentication.getName(), req.name());
     }
 }

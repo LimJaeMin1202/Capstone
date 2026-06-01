@@ -89,7 +89,15 @@ public class AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
         user.setBirthYear(birthYear);
-        // @Transactional 트랜잭션 안에서 변경 감지로 자동 update
+        return new UserResponse(user.getUsername(), user.getName(), user.getBirthYear());
+    }
+
+    // 이름 변경 (카카오 가입자의 자동 닉네임을 본인 이름으로 바꾸는 등)
+    @Transactional
+    public UserResponse updateName(String username, String name) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
+        user.setName(name.trim());
         return new UserResponse(user.getUsername(), user.getName(), user.getBirthYear());
     }
 }

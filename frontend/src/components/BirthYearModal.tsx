@@ -1,27 +1,36 @@
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { buildDecadeOptions } from "../utils/birthYearOptions";
 
-// 카카오로 가입한 사용자가 첫 로그인 후 출생연도를 입력하는 모달
-// 입력 전엔 닫을 수 없음 (나이별 운동 기준 적용 위해 필수)
-export default function BirthYearModal() {
-  const { setBirthYear } = useAuth();
-  const [value, setValue] = useState("");
+// 두 모드 지원:
+//  - required: 카카오 가입자 첫 로그인 (닫기 불가, 반드시 입력)
+//  - edit: 프로필 수정 (취소 가능)
+interface Props {
+  mode?: "required" | "edit";
+  onClose?: () => void;
+}
+
+export default function BirthYearModal({ mode = "required", onClose }: Props) {
+  const { user, setBirthYear } = useAuth();
+  // edit 모드면 현재 값으로 초기 선택 (가까운 10년대 중간으로 스냅)
+  const initial = mode === "edit" && user?.birthYear ? snapToDecade(user.birthYear) : null;
+  const [selected, setSelected] = useState<number | null>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  const options = buildDecadeOptions();
+  const isEdit = mode === "edit";
 
-    const year = Number(value);
-    if (!value || !Number.isInteger(year) || year < 1900 || year > 2025) {
-      setError("올바른 출생연도를 입력해주세요 (예: 1965)");
+  async function handleSubmit() {
+    if (selected === null) {
+      setError("연령대를 선택해주세요");
       return;
     }
-
+    setError(null);
     setBusy(true);
     try {
-      await setBirthYear(year);
+      await setBirthYear(selected);
+      if (isEdit && onClose) onClose();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -29,36 +38,72 @@ export default function BirthYearModal() {
     }
   }
 
+  // 백드롭 클릭으로 닫기는 edit 모드에서만
+  function handleBackdropClick() {
+    if (isEdit && onClose && !busy) onClose();
+  }
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal-card">
-        <h2 className="modal-title">출생연도를 알려주세요</h2>
+    <div className="modal-backdrop" onClick={handleBackdropClick}>
+      <div
+        className="modal-card modal-card-wide"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="modal-title">
+          {isEdit ? "연령대 변경" : "언제 태어나셨나요?"}
+        </h2>
         <p className="modal-desc">
-          나이대에 맞는 운동 기준을 적용하기 위해 한 번만 입력받습니다.
+          {isEdit
+            ? "연령대를 새로 선택하면 운동 기준이 다시 적용됩니다."
+            : "연령대에 맞는 운동 기준을 적용하기 위해 한 번만 알려주세요."}
         </p>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label className="auth-field">
-            출생연도
-            <input
-              type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="예: 1965"
-              min={1900}
-              max={2025}
-              inputMode="numeric"
-              autoFocus
-            />
-          </label>
+        <div className="decade-grid">
+          {options.map((opt) => (
+            <button
+              key={opt.birthYear}
+              type="button"
+              className={
+                "decade-btn" +
+                (selected === opt.birthYear ? " decade-btn-selected" : "")
+              }
+              onClick={() => setSelected(opt.birthYear)}
+              disabled={busy}
+            >
+              <div className="decade-btn-label">{opt.label}</div>
+            </button>
+          ))}
+        </div>
 
-          {error && <p className="auth-error">{error}</p>}
+        {error && <p className="auth-error">{error}</p>}
 
-          <button type="submit" className="auth-submit" disabled={busy}>
-            {busy ? "저장 중..." : "저장"}
+        <div className="modal-actions">
+          {isEdit && (
+            <button
+              type="button"
+              className="modal-btn-secondary"
+              onClick={onClose}
+              disabled={busy}
+            >
+              취소
+            </button>
+          )}
+          <button
+            type="button"
+            className="auth-submit"
+            onClick={handleSubmit}
+            disabled={busy || selected === null}
+          >
+            {busy ? "저장 중..." : isEdit ? "변경" : "확인"}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );
+}
+
+// 임의 출생연도를 가장 가까운 10년대 중간값(...5)으로 변환
+// 예) 1962 → 1965, 1953 → 1955
+function snapToDecade(year: number): number {
+  return Math.floor(year / 10) * 10 + 5;
 }

@@ -23,6 +23,7 @@ interface AuthContextType {
   loginWithKakao: () => void;
   logout: () => void;
   setBirthYear: (birthYear: number) => Promise<void>;
+  setName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -104,6 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(updated);
   }
 
+  async function setName(name: string) {
+    const updated = await authApi.updateName(name);
+    setUser(updated);
+  }
+
   // 카카오 인증 페이지로 리다이렉트 → 사용자가 동의하면 ?code=...로 돌아옴
   function loginWithKakao() {
     const url =
@@ -129,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithKakao,
         logout,
         setBirthYear,
+        setName,
       }}
     >
       {children}

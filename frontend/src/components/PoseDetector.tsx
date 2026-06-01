@@ -417,7 +417,6 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
   return (
     <div className="pose-area">
       <div className="pose-video-col">
-        <p className="pose-status">{status}</p>
         <div className="video-wrap">
           <video ref={videoRef} autoPlay playsInline className="cam-video" />
           <canvas
@@ -426,6 +425,11 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
             height={VIDEO_HEIGHT}
             className="cam-canvas"
           />
+
+          {/* 상태 chip (영상 좌상단, 운동 중엔 숨김) */}
+          {status && phase !== "exercising" && (
+            <div className="pose-status-chip">{status}</div>
+          )}
 
           {/* 준비 완료 → 시작 버튼 오버레이 */}
           {phase === "ready" && (

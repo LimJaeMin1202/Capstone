@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { buildDecadeOptions } from "../utils/birthYearOptions";
 
 export default function AuthPage() {
   const { login, signup, loginWithKakao } = useAuth();
@@ -8,9 +9,10 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [name, setName] = useState("");
-  const [birthYear, setBirthYearInput] = useState("");
+  const [birthYear, setBirthYearInput] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const decadeOptions = buildDecadeOptions();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,12 +23,9 @@ export default function AuthPage() {
       return;
     }
 
-    if (mode === "signup") {
-      const year = Number(birthYear);
-      if (!birthYear || !Number.isInteger(year) || year < 1900 || year > 2025) {
-        setError("출생연도를 올바르게 입력해주세요 (예: 1965)");
-        return;
-      }
+    if (mode === "signup" && birthYear === null) {
+      setError("연령대를 선택해주세요");
+      return;
     }
 
     setBusy(true);
@@ -34,7 +33,7 @@ export default function AuthPage() {
       if (mode === "login") {
         await login(username, password);
       } else {
-        await signup(username, password, name, Number(birthYear));
+        await signup(username, password, name, birthYear!);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -99,16 +98,23 @@ export default function AuthPage() {
 
           {mode === "signup" && (
             <label className="auth-field">
-              출생연도
-              <input
-                type="number"
-                value={birthYear}
-                onChange={(e) => setBirthYearInput(e.target.value)}
-                placeholder="예: 1965"
-                min={1900}
-                max={2025}
-                inputMode="numeric"
-              />
+              연령대
+              <select
+                className="auth-select"
+                value={birthYear ?? ""}
+                onChange={(e) =>
+                  setBirthYearInput(
+                    e.target.value === "" ? null : Number(e.target.value)
+                  )
+                }
+              >
+                <option value="">선택해주세요</option>
+                {decadeOptions.map((opt) => (
+                  <option key={opt.birthYear} value={opt.birthYear}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
 

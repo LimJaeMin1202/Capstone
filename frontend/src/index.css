@@ -42,6 +42,10 @@ body {
   background: var(--bg-gradient);
   background-attachment: fixed;
   color: var(--text);
+  /* 한국어 어절 단위 줄바꿈 (단어 중간 끊김 방지)
+     긴 영문 단어는 overflow-wrap으로 강제 줄바꿈 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 #root {

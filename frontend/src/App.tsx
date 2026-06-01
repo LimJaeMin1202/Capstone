@@ -7,6 +7,7 @@ import RecordsScreen from "./components/RecordsScreen";
 import ResultScreen from "./components/ResultScreen";
 import AuthPage from "./components/AuthPage";
 import BirthYearModal from "./components/BirthYearModal";
+import SettingsModal from "./components/SettingsModal";
 import { saveRecord } from "./api/records";
 import { useAuth } from "./auth/AuthContext";
 import "./App.css";
@@ -27,6 +28,7 @@ function App() {
   const [view, setView] = useState<View>("select");
   const [selected, setSelected] = useState<Exercise | null>(null);
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   // 글씨 크기 (localStorage에 저장, 로그인 전후 모두 적용)
   const [fontSize, setFontSize] = useState<FontSize>(
@@ -90,7 +92,8 @@ function App() {
 
   return (
     <div className="app">
-      {needBirthYear && <BirthYearModal />}
+      {needBirthYear && <BirthYearModal mode="required" />}
+      {showProfile && <SettingsModal onClose={() => setShowProfile(false)} />}
       <header className="navbar">
         <div className="navbar-inner">
           <button
@@ -141,6 +144,15 @@ function App() {
             </div>
 
             <span className="navbar-user">{user.name}님</span>
+            <button
+              type="button"
+              className="settings-btn"
+              onClick={() => setShowProfile(true)}
+              title="설정"
+              aria-label="설정"
+            >
+              ⚙
+            </button>
             <button className="logout-btn" onClick={handleLogout}>
               로그아웃
             </button>

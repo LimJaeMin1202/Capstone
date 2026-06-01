@@ -36,6 +36,16 @@ export async function updateBirthYear(birthYear: number): Promise<AuthUser> {
   return res.json();
 }
 
+export async function updateName(name: string): Promise<AuthUser> {
+  const res = await apiFetch("/api/auth/me/name", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return res.json();
+}
+
 export async function login(
   username: string,
   password: string

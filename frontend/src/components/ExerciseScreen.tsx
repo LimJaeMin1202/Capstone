@@ -1,6 +1,7 @@
 import type { Exercise } from "../types/exercise";
 import PoseDetector, { type SessionStats } from "./PoseDetector";
 import ExerciseImage from "./ExerciseImage";
+import { EXERCISE_GUIDES, DEFAULT_GUIDE } from "../data/exerciseGuides";
 
 interface Props {
   exercise: Exercise;
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) {
+  const guide = EXERCISE_GUIDES[exercise.id] ?? DEFAULT_GUIDE;
+
   return (
     <div className="exercise-detail">
       <button className="back-btn" onClick={onBack}>
@@ -17,8 +20,9 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
 
       <h1 className="exercise-title">{exercise.name}</h1>
       <p className="exercise-meta">
-        {exercise.bodyPart} · 목표 {exercise.normalTarget}° (허용{" "}
-        {exercise.allowedTarget}°)
+        <span className="meta-chip">{exercise.bodyPart}</span>
+        <span className="meta-chip meta-chip-soft">난이도 {exercise.difficulty}</span>
+        <span className="meta-chip meta-chip-soft">목표 {exercise.normalTarget}°</span>
       </p>
 
       <div className="exercise-guide">
@@ -28,21 +32,57 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
             category={exercise.category}
           />
         </div>
+
         <div className="exercise-guide-text">
-          <h3>운동 방법</h3>
-          {exercise.notes ? (
-            <p>{exercise.notes}</p>
-          ) : (
-            <p style={{ color: "var(--text-muted)" }}>
-              카메라 앞에 서서 천천히 동작을 따라해보세요.
-            </p>
-          )}
+          <div className="guide-section">
+            <h3 className="guide-section-title">
+              <span className="guide-section-icon">📌</span>
+              준비 자세
+            </h3>
+            <p className="guide-prepare">{guide.prepare}</p>
+          </div>
+
+          <div className="guide-section">
+            <h3 className="guide-section-title">
+              <span className="guide-section-icon">👣</span>
+              따라하기
+            </h3>
+            <ol className="guide-steps">
+              {guide.steps.map((step, idx) => (
+                <li key={idx}>
+                  <span className="step-num">{idx + 1}</span>
+                  <span className="step-text">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="guide-section guide-caution-box">
+            <h3 className="guide-section-title">
+              <span className="guide-section-icon">⚠️</span>
+              주의 사항
+            </h3>
+            <ul className="guide-cautions">
+              {guide.cautions.map((c, idx) => (
+                <li key={idx}>{c}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="guide-section guide-benefit-box">
+            <h3 className="guide-section-title">
+              <span className="guide-section-icon">💪</span>
+              어떤 효과가 있나요?
+            </h3>
+            <p className="guide-benefit">{guide.benefit}</p>
+          </div>
         </div>
       </div>
 
       <PoseDetector
         key={exercise.id}
         exercise={exercise}
+        holdSeconds={guide.holdSeconds}
         onComplete={onComplete}
       />
     </div>

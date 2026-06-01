@@ -532,21 +532,134 @@
 }
 
 .exercise-guide-text {
-  flex: 1 1 240px;
+  flex: 1 1 360px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.exercise-guide-text h3 {
-  font-size: 1.05rem;
-  margin-bottom: 8px;
+/* 칩 스타일 (exercise-meta 영역) */
+.meta-chip {
+  display: inline-block;
+  background: var(--primary-soft);
   color: var(--primary-dark);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-right: 6px;
 }
 
-.exercise-guide-text p {
+.meta-chip-soft {
+  background: var(--surface-alt);
+  color: var(--text-muted);
+}
+
+/* 가이드 섹션 공통 */
+.guide-section {
+  background: var(--surface);
+}
+
+.guide-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin: 0 0 8px;
+}
+
+.guide-section-icon {
+  font-size: 1.15rem;
+}
+
+/* 준비 자세 */
+.guide-prepare {
   margin: 0;
+  font-size: 1rem;
+  line-height: 1.65;
   color: var(--text);
+}
+
+/* 단계별 동작 순서 */
+.guide-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guide-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.step-text {
   font-size: 1rem;
   line-height: 1.6;
+  color: var(--text);
+}
+
+/* 주의 사항 박스 */
+.guide-caution-box {
+  background: #fff6e6;
+  border: 1px solid #f0d28a;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.guide-caution-box .guide-section-title {
+  color: #8a5a00;
+}
+
+.guide-cautions {
+  margin: 0;
+  padding-left: 18px;
+  color: #6b4500;
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.guide-cautions li {
+  margin-bottom: 4px;
+}
+
+.guide-cautions li:last-child {
+  margin-bottom: 0;
+}
+
+/* 효과 박스 */
+.guide-benefit-box {
+  background: var(--primary-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.guide-benefit {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--primary-dark);
 }
 
 /* ===== 영상 + 패널 ===== */
@@ -646,6 +759,35 @@
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* 자세 유지 중 남은 초 표시 (영상 우상단 큰 동그라미) */
+.hold-countdown-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 15;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(30, 158, 84, 0.92);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  font-weight: 800;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  animation: hold-pulse 1s ease-in-out infinite;
+}
+
+@keyframes hold-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
   }
 }
 

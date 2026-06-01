@@ -268,6 +268,7 @@
 
 .navbar-nav {
   display: flex;
+  align-items: center;   /* 글씨 크기 바뀌어도 모든 항목 가운데 정렬 유지 */
   gap: 8px;
 }
 
@@ -911,7 +912,7 @@
 .pose-area {
   display: flex;
   gap: 20px;
-  align-items: stretch;
+  align-items: flex-start;
   flex-wrap: wrap;
 }
 
@@ -1056,13 +1057,11 @@
   gap: 14px;
 }
 
-/* 정보 카드 2x2 그리드 — 남는 공간 채워서 비디오 높이에 맞춤 */
+/* 정보 카드 2x2 그리드 — 자연 크기 유지 (글씨 크기에 따라 비율 안 망가짐) */
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  flex: 1 1 auto;   /* 피드백/완료버튼 사이 남는 공간 다 차지 */
-  min-height: 200px;
 }
 
 .feedback-box {

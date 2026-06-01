@@ -19,8 +19,8 @@ interface LastResult {
   stats: SessionStats;
 }
 
-// 어르신 친화 글씨 크기 설정
-const FONT_SIZES = { small: "16px", normal: "18px", large: "22px" } as const;
+// 어르신 친화 글씨 크기 설정 — 어르신 시력 고려해 전반적으로 더 큼
+const FONT_SIZES = { small: "18px", normal: "22px", large: "26px" } as const;
 type FontSize = keyof typeof FONT_SIZES;
 
 function App() {

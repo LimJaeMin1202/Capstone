@@ -1,13 +1,16 @@
-// 운동 ID → 어르신 친화 가이드 (준비 자세 / 동작 순서 / 주의사항 / 효과 / 유지시간)
+// 운동 ID → 어르신 친화 가이드 (준비 자세 / 동작 순서 / 주의사항 / 효과 / 유지시간 / 카메라 위치)
 // 백엔드 exercises.json의 notes는 개발자용 메모라 사용자에게 안 보임.
 // 사용자에게 보여줄 설명은 모두 여기서 관리.
 
+export type CameraPosition = "정면" | "측면";
+
 export interface ExerciseGuide {
-  prepare: string;       // 준비 자세 한두 줄
-  steps: string[];       // 동작 순서 (3~4단계)
-  cautions: string[];    // 주의 사항 (1~2개)
-  benefit: string;       // 어떤 분에게 좋은지
-  holdSeconds: number;   // 목표 자세 유지 시간 (초). 이만큼 유지 후 풀어야 1회 카운트
+  prepare: string;
+  steps: string[];
+  cautions: string[];
+  benefit: string;
+  holdSeconds: number;
+  cameraPosition: CameraPosition;  // "정면": 앞에서 / "측면": 옆에서
 }
 
 export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
@@ -25,6 +28,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨 앞쪽 근육을 부드럽게 풀어줘서 일상 동작이 편해져요.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-lateral-raise": {
@@ -40,6 +44,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨 옆쪽 근육을 강화하고 어깨 부딪힘을 예방해줘요.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-chest-press": {
@@ -55,6 +60,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "가슴 근육을 강화해서 굽은 어깨를 펴는 데 도움이 됩니다.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-biceps-curl": {
@@ -70,6 +76,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "팔 앞쪽 근육을 키워서 무거운 물건을 들기 쉬워져요.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-overhead-press": {
@@ -85,6 +92,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨와 등 윗부분을 강화해서 자세가 곧아져요.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-leg-extension": {
@@ -100,6 +108,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허벅지 앞쪽 근육을 키워서 무릎 관절염 예방에 좋아요.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "seated-marching": {
@@ -115,6 +124,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "골반과 다리 근육을 함께 써서 걷기 능력이 좋아집니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "seated-good-morning": {
@@ -130,6 +140,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허리와 등 근육을 부드럽게 풀어주어 허리 통증 예방에 좋아요.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "seated-ankle-pump": {
@@ -145,6 +156,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "다리 혈액순환을 도와 다리 부종과 저림을 줄여줘요.",
     holdSeconds: 1,
+    cameraPosition: "측면",
   },
 
   "seated-knee-to-chest": {
@@ -160,6 +172,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "고관절 유연성을 높이고 허리를 시원하게 풀어줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "seated-side-bend": {
@@ -175,6 +188,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "옆구리 근육을 풀어주고 척추 유연성을 길러줍니다.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "seated-hamstring-stretch": {
@@ -190,6 +204,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허벅지 뒤쪽과 허리 아랫부분을 시원하게 풀어줘요.",
     holdSeconds: 3,
+    cameraPosition: "측면",
   },
 
   // ===== 벽·의자 지지 (9개) =====
@@ -206,6 +221,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "가슴과 팔 뒤쪽 근육을 안전하게 강화해줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "chair-mini-squat": {
@@ -221,6 +237,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허벅지와 엉덩이 근육을 키워서 다리 힘이 좋아집니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "standing-side-leg-raise": {
@@ -236,6 +253,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "엉덩이 옆 근육을 강화해서 걸음걸이가 안정됩니다.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "standing-hip-extension": {
@@ -251,6 +269,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "엉덩이 근육을 키워서 골반과 허리를 안정시켜줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "standing-leg-curl": {
@@ -266,6 +285,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허벅지 뒤쪽 근육을 강화해서 무릎이 안정됩니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "wall-slide": {
@@ -281,6 +301,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "굽은 등을 펴주고 어깨 가동 범위를 넓혀줍니다.",
     holdSeconds: 2,
+    cameraPosition: "정면",
   },
 
   "assisted-mini-lunge": {
@@ -296,6 +317,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "균형 감각과 다리 근력을 함께 길러줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "assisted-calf-raise": {
@@ -311,6 +333,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "종아리 근육을 강화해서 다리 부종이 줄어들어요.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "wall-squat": {
@@ -326,6 +349,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "허벅지와 무릎 주변을 안전하게 강화해줍니다.",
     holdSeconds: 5,
+    cameraPosition: "측면",
   },
 
   // ===== 바닥·매트 (8개) =====
@@ -342,6 +366,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "엉덩이와 허리 근육을 동시에 키워줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "lying-overhead-arm-reach": {
@@ -357,6 +382,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨 가동성을 높이고 굽은 등을 시원하게 펴줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "lying-knee-to-chest": {
@@ -372,6 +398,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "고관절 유연성을 높이고 허리 긴장을 풀어줍니다.",
     holdSeconds: 5,
+    cameraPosition: "측면",
   },
 
   "straight-leg-raise": {
@@ -387,6 +414,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "복부와 허벅지 앞쪽 근육을 함께 강화해줍니다.",
     holdSeconds: 2,
+    cameraPosition: "측면",
   },
 
   "prone-mini-swan": {
@@ -402,6 +430,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "굽은 등과 허리를 시원하게 펴줍니다.",
     holdSeconds: 3,
+    cameraPosition: "측면",
   },
 
   "modified-bird-dog": {
@@ -417,6 +446,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "전신의 균형 감각과 허리 안정성을 길러줍니다.",
     holdSeconds: 3,
+    cameraPosition: "측면",
   },
 
   "kneeling-plank": {
@@ -432,6 +462,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "복부와 코어 전체를 안전하게 강화해줍니다.",
     holdSeconds: 12,
+    cameraPosition: "측면",
   },
 
   "lying-heel-touch": {
@@ -447,6 +478,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "옆구리 근육을 자극해서 허리 라인이 매끈해집니다.",
     holdSeconds: 1,
+    cameraPosition: "정면",
   },
 };
 
@@ -461,4 +493,5 @@ export const DEFAULT_GUIDE: ExerciseGuide = {
   cautions: ["통증이 느껴지면 즉시 멈추세요."],
   benefit: "꾸준한 운동은 건강에 큰 도움이 됩니다.",
   holdSeconds: 2,
+  cameraPosition: "정면",
 };

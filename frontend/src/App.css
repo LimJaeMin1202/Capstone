@@ -5,6 +5,40 @@
   flex-direction: column;
 }
 
+/* ===== 모달 ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+  color: var(--primary-dark);
+}
+
+.modal-desc {
+  margin: 0 0 18px;
+  color: var(--text-muted);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
 .main {
   width: 100%;
   max-width: 1200px;

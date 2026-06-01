@@ -3,6 +3,7 @@ import { apiFetch, extractError } from "./client";
 export interface AuthUser {
   username: string;
   name: string;
+  birthYear: number | null;
 }
 
 interface LoginResult {
@@ -14,14 +15,25 @@ interface LoginResult {
 export async function signup(
   username: string,
   password: string,
-  name: string
+  name: string,
+  birthYear: number
 ): Promise<void> {
   const res = await apiFetch("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password, name }),
+    body: JSON.stringify({ username, password, name, birthYear }),
   });
   if (!res.ok) throw new Error(await extractError(res));
+}
+
+export async function updateBirthYear(birthYear: number): Promise<AuthUser> {
+  const res = await apiFetch("/api/auth/me/birth-year", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ birthYear }),
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return res.json();
 }
 
 export async function login(

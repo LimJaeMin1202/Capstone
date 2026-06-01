@@ -1,6 +1,7 @@
 package com.capstone.backend.controller;
 
 import com.capstone.backend.dto.AuthResponse;
+import com.capstone.backend.dto.BirthYearRequest;
 import com.capstone.backend.dto.KakaoLoginRequest;
 import com.capstone.backend.dto.LoginRequest;
 import com.capstone.backend.dto.SignupRequest;
@@ -42,5 +43,14 @@ public class AuthController {
     @GetMapping("/me")
     public UserResponse me(Authentication authentication) {
         return authService.getMe(authentication.getName());
+    }
+
+    // 출생연도 입력·수정 (주로 카카오 가입자 첫 로그인 후 모달)
+    @PatchMapping("/me/birth-year")
+    public UserResponse updateBirthYear(
+            Authentication authentication,
+            @Valid @RequestBody BirthYearRequest req
+    ) {
+        return authService.updateBirthYear(authentication.getName(), req.birthYear());
     }
 }

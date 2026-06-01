@@ -14,9 +14,15 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  signup: (username: string, password: string, name: string) => Promise<void>;
+  signup: (
+    username: string,
+    password: string,
+    name: string,
+    birthYear: number
+  ) => Promise<void>;
   loginWithKakao: () => void;
   logout: () => void;
+  setBirthYear: (birthYear: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -45,9 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 카카오 콜백 처리
       authApi
         .kakaoLogin(code, KAKAO_REDIRECT_URI)
-        .then((result) => {
+        .then(async (result) => {
           setToken(result.token);
-          setUser({ username: result.username, name: result.name });
+          // birthYear 까지 받아오려면 me 호출 (카카오 신규 가입자는 null)
+          const me = await authApi.getMe();
+          setUser(me);
         })
         .catch((err) => {
           console.error("카카오 로그인 실패:", err);
@@ -76,12 +84,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(username: string, password: string) {
     const result = await authApi.login(username, password);
     setToken(result.token);
-    setUser({ username: result.username, name: result.name });
+    // 로그인 직후엔 token/username/name만 받으니 me로 birthYear까지 채워옴
+    const me = await authApi.getMe();
+    setUser(me);
   }
 
-  async function signup(username: string, password: string, name: string) {
-    await authApi.signup(username, password, name);
+  async function signup(
+    username: string,
+    password: string,
+    name: string,
+    birthYear: number
+  ) {
+    await authApi.signup(username, password, name, birthYear);
     await login(username, password);
+  }
+
+  async function setBirthYear(birthYear: number) {
+    const updated = await authApi.updateBirthYear(birthYear);
+    setUser(updated);
   }
 
   // 카카오 인증 페이지로 리다이렉트 → 사용자가 동의하면 ?code=...로 돌아옴
@@ -101,7 +121,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, loginWithKakao, logout }}
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        loginWithKakao,
+        logout,
+        setBirthYear,
+      }}
     >
       {children}
     </AuthContext.Provider>

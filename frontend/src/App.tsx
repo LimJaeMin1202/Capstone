@@ -6,6 +6,7 @@ import ExerciseScreen from "./components/ExerciseScreen";
 import RecordsScreen from "./components/RecordsScreen";
 import ResultScreen from "./components/ResultScreen";
 import AuthPage from "./components/AuthPage";
+import BirthYearModal from "./components/BirthYearModal";
 import { saveRecord } from "./api/records";
 import { useAuth } from "./auth/AuthContext";
 import "./App.css";
@@ -84,8 +85,12 @@ function App() {
     return <AuthPage />;
   }
 
+  // 카카오 가입자가 아직 출생연도 입력 안 했으면 강제 모달
+  const needBirthYear = user.birthYear === null;
+
   return (
     <div className="app">
+      {needBirthYear && <BirthYearModal />}
       <header className="navbar">
         <div className="navbar-inner">
           <button

@@ -37,6 +37,9 @@ public class User {
     @Column(name = "kakao_id", unique = true)
     private String kakaoId; // 카카오 로그인 사용자 식별자 (일반 가입자는 null)
 
+    @Column(name = "birth_year")
+    private Integer birthYear; // 출생연도 (나이별 기준·통계용). 카카오 가입자는 첫 로그인 후 모달로 입력
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

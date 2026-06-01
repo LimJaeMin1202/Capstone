@@ -31,6 +31,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(req.password()))
                 .name(req.name())
                 .role("USER")
+                .birthYear(req.birthYear())
                 .build();
         userRepository.save(user);
     }
@@ -79,6 +80,16 @@ public class AuthService {
     public UserResponse getMe(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
-        return new UserResponse(user.getUsername(), user.getName());
+        return new UserResponse(user.getUsername(), user.getName(), user.getBirthYear());
+    }
+
+    // 카카오 가입자가 첫 로그인 후 출생연도를 입력하는 용도
+    @Transactional
+    public UserResponse updateBirthYear(String username, Integer birthYear) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
+        user.setBirthYear(birthYear);
+        // @Transactional 트랜잭션 안에서 변경 감지로 자동 update
+        return new UserResponse(user.getUsername(), user.getName(), user.getBirthYear());
     }
 }

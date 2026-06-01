@@ -8,6 +8,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [name, setName] = useState("");
+  const [birthYear, setBirthYearInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,12 +21,20 @@ export default function AuthPage() {
       return;
     }
 
+    if (mode === "signup") {
+      const year = Number(birthYear);
+      if (!birthYear || !Number.isInteger(year) || year < 1900 || year > 2025) {
+        setError("출생연도를 올바르게 입력해주세요 (예: 1965)");
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       if (mode === "login") {
         await login(username, password);
       } else {
-        await signup(username, password, name);
+        await signup(username, password, name, Number(birthYear));
       }
     } catch (err) {
       setError((err as Error).message);
@@ -84,6 +93,21 @@ export default function AuthPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="이름 입력"
+              />
+            </label>
+          )}
+
+          {mode === "signup" && (
+            <label className="auth-field">
+              출생연도
+              <input
+                type="number"
+                value={birthYear}
+                onChange={(e) => setBirthYearInput(e.target.value)}
+                placeholder="예: 1965"
+                min={1900}
+                max={2025}
+                inputMode="numeric"
               />
             </label>
           )}

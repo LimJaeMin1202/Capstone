@@ -52,6 +52,7 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
         key={exercise.id}
         exercise={exercise}
         holdSeconds={guide.holdSeconds}
+        mode={guide.mode}
         onComplete={onComplete}
       />
 

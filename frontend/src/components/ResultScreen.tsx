@@ -9,14 +9,19 @@ interface Props {
   onRecords: () => void;
 }
 
-// 운동 횟수 + 정확도에 따른 축하 메시지
-// 횟수 0이면 정확도와 무관하게 격려 메시지
-function getCelebration(goodCount: number, accuracy: number): {
+// 운동 횟수/유지 시간 + 정확도에 따른 축하 메시지
+// 0회이거나 누적 유지 시간이 매우 짧으면 정확도와 무관하게 격려 메시지
+function getCelebration(stats: SessionStats): {
   emoji: string;
   title: string;
   message: string;
 } {
-  if (goodCount === 0) {
+  const accuracy = stats.accuracy;
+  const noProgress =
+    stats.mode === "hold"
+      ? stats.totalHoldSeconds < 3
+      : stats.goodCount === 0;
+  if (noProgress) {
     return {
       emoji: "🙏",
       title: "오늘은 여기까지 해도 괜찮아요",
@@ -65,7 +70,7 @@ export default function ResultScreen({
   onAnother,
   onRecords,
 }: Props) {
-  const celebration = getCelebration(stats.goodCount, stats.accuracy);
+  const celebration = getCelebration(stats);
 
   return (
     <div className="result-wrap">
@@ -89,10 +94,19 @@ export default function ResultScreen({
       </div>
 
       <div className="result-stats">
-        <div className="result-stat">
-          <div className="result-stat-value">{stats.goodCount}</div>
-          <div className="result-stat-label">운동 횟수</div>
-        </div>
+        {stats.mode === "hold" ? (
+          <div className="result-stat">
+            <div className="result-stat-value">
+              {formatDuration(stats.totalHoldSeconds)}
+            </div>
+            <div className="result-stat-label">총 유지 시간</div>
+          </div>
+        ) : (
+          <div className="result-stat">
+            <div className="result-stat-value">{stats.goodCount}</div>
+            <div className="result-stat-label">운동 횟수</div>
+          </div>
+        )}
         <div className="result-stat">
           <div className="result-stat-value">{formatDuration(stats.duration)}</div>
           <div className="result-stat-label">운동 시간</div>

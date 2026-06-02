@@ -34,14 +34,17 @@ type RepPhase = "rest" | "holding" | "satisfied";
 //  satisfied → 목표 시간 채움, 사용자가 풀어주길 기다림 → 풀면 카운트++
 
 export interface SessionStats {
-  goodCount: number;
-  duration: number;
-  accuracy: number;
+  mode: "rep" | "hold";        // 운동 모드
+  goodCount: number;           // rep: 횟수 / hold: 자세 잡았다 풀었다 한 사이클 수
+  duration: number;            // 총 운동 시간 (초)
+  accuracy: number;            // 정확한 자세 프레임 비율 (%)
+  totalHoldSeconds: number;    // hold 모드용: 누적으로 자세를 유지한 총 시간 (초)
 }
 
 interface Props {
   exercise: Exercise;
-  holdSeconds: number;     // 이만큼 자세 유지 후 풀어야 1회 카운트
+  holdSeconds: number;
+  mode: "rep" | "hold";        // rep: 자세 잡고 풀고 반복 / hold: 한 자세 길게 유지
   onComplete: (stats: SessionStats) => void;
 }
 
@@ -50,7 +53,7 @@ interface Feedback {
   color: string;
 }
 
-export default function PoseDetector({ exercise, holdSeconds, onComplete }: Props) {
+export default function PoseDetector({ exercise, holdSeconds, mode, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
@@ -67,6 +70,15 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
   const countRef = useRef<number>(0);
   const totalFramesRef = useRef<number>(0);
   const goodFramesRef = useRef<number>(0);
+
+  // hold 모드: 자세를 잡고 있는 동안 매 프레임 누적되는 시간 (ms)
+  const holdAccumMsRef = useRef<number>(0);
+  const lastTickRef = useRef<number>(0);
+
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   // ===== UI 안정화 =====
   const leftEmaRef = useRef<number | null>(null);
@@ -95,6 +107,8 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
   const [angleText, setAngleText] = useState("-");
   // 카운트다운 표시 (holding 중 남은 시간을 작게 보여줌)
   const [holdCountdown, setHoldCountdown] = useState<number | null>(null);
+  // hold 모드용: 누적 유지 시간 (초)
+  const [totalHoldSec, setTotalHoldSec] = useState(0);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -239,6 +253,17 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
         totalFramesRef.current += 1;
         if (inPose) goodFramesRef.current += 1;
 
+        // hold 모드: 자세 잡고 있는 동안 매 프레임 시간 누적
+        // 잠시 끊겨도 (recentlyInPose) 누적 유지하고, 진짜 풀리면 lastTick 리셋
+        if (inPose) {
+          if (lastTickRef.current > 0) {
+            holdAccumMsRef.current += now - lastTickRef.current;
+          }
+          lastTickRef.current = now;
+        } else if (!(now - lastInPoseRef.current < PHASE_GRACE_MS)) {
+          lastTickRef.current = 0;
+        }
+
         // 그레이스 윈도우: 자세 한두 프레임 흔들려도 같은 phase 유지
         if (inPose) lastInPoseRef.current = now;
         const recentlyInPose = now - lastInPoseRef.current < PHASE_GRACE_MS;
@@ -310,6 +335,9 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
         lastUiRef.current = now;
         setAngleText(angleStr);
         setHoldCountdown(countdownDisplay);
+        if (modeRef.current === "hold") {
+          setTotalHoldSec(Math.floor(holdAccumMsRef.current / 1000));
+        }
         if (msg !== lastMsgRef.current) {
           lastMsgRef.current = msg;
           setFeedback({ msg, color });
@@ -392,6 +420,10 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
         releaseStartRef.current = null;
         lastInPoseRef.current = 0;
         lastMsgRef.current = "";
+        // hold 모드 누적 시간 초기화
+        holdAccumMsRef.current = 0;
+        lastTickRef.current = 0;
+        setTotalHoldSec(0);
 
         setCountdown(null);
         setPhase("exercising");
@@ -411,7 +443,13 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
     const total = totalFramesRef.current;
     const accuracy =
       total > 0 ? Math.round((goodFramesRef.current / total) * 100) : 0;
-    onComplete({ goodCount: countRef.current, duration, accuracy });
+    onComplete({
+      mode,
+      goodCount: countRef.current,
+      duration,
+      accuracy,
+      totalHoldSeconds: Math.floor(holdAccumMsRef.current / 1000),
+    });
   }
 
   return (
@@ -461,8 +499,17 @@ export default function PoseDetector({ exercise, holdSeconds, onComplete }: Prop
           {feedback.msg}
         </div>
         <div className="info-grid">
-          <InfoBox value={String(count)} label="✅ 운동 횟수" />
-          <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
+          {mode === "hold" ? (
+            <>
+              <InfoBox value={`${totalHoldSec}초`} label="🔥 누적 유지 시간" />
+              <InfoBox value={`${holdSeconds}초`} label="🎯 목표 유지 시간" />
+            </>
+          ) : (
+            <>
+              <InfoBox value={String(count)} label="✅ 운동 횟수" />
+              <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
+            </>
+          )}
           <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
           <InfoBox value={angleText} label="📐 현재 각도" />
         </div>

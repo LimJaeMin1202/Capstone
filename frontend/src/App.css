@@ -759,6 +759,11 @@
   flex-wrap: wrap;
 }
 
+/* 카메라 아래에 위치하는 가이드 — 카메라와 충분한 간격 */
+.exercise-guide-below {
+  margin-top: 28px;
+}
+
 .exercise-guide-img {
   flex: 0 0 240px;
   aspect-ratio: 1 / 1;

@@ -19,9 +19,8 @@ interface LastResult {
   stats: SessionStats;
 }
 
-// 어르신 친화 글씨 크기 설정 — 어르신 시력 고려해 전반적으로 더 큼
-const FONT_SIZES = { small: "18px", normal: "22px", large: "26px" } as const;
-type FontSize = keyof typeof FONT_SIZES;
+// 어르신 친화 글씨 크기 — 실제 px는 CSS에서 결정 (PC/모바일 다르게 매핑)
+type FontSize = "small" | "normal" | "large";
 
 function App() {
   const { user, loading, logout } = useAuth();
@@ -36,7 +35,8 @@ function App() {
   );
 
   useEffect(() => {
-    document.documentElement.style.fontSize = FONT_SIZES[fontSize];
+    // data-font-size 속성으로 CSS가 화면 폭별로 다른 px 적용
+    document.documentElement.setAttribute("data-font-size", fontSize);
     localStorage.setItem("font-size", fontSize);
   }, [fontSize]);
 
@@ -93,7 +93,12 @@ function App() {
   return (
     <div className="app">
       {needBirthYear && <BirthYearModal mode="required" />}
-      {showProfile && <SettingsModal onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <SettingsModal
+          onClose={() => setShowProfile(false)}
+          onLogout={handleLogout}
+        />
+      )}
       <header className="navbar">
         <div className="navbar-inner">
           <button
@@ -152,9 +157,6 @@ function App() {
               aria-label="설정"
             >
               ⚙
-            </button>
-            <button className="logout-btn" onClick={handleLogout}>
-              로그아웃
             </button>
           </nav>
         </div>

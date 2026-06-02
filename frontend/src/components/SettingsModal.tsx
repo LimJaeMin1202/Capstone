@@ -5,11 +5,12 @@ import { fetchMyGoal, updateMyGoal, type UserGoal } from "../api/goals";
 
 interface Props {
   onClose: () => void;
+  onLogout: () => void;
 }
 
 // 통합 설정 모달
 // 향후 항목 추가: 비밀번호 변경, 알림 설정 등
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, onLogout }: Props) {
   const { user, setName } = useAuth();
   const [editingBirthYear, setEditingBirthYear] = useState(false);
 
@@ -273,6 +274,19 @@ export default function SettingsModal({ onClose }: Props) {
                 {goalError}
               </p>
             )}
+          </div>
+
+          <div className="settings-section">
+            <button
+              type="button"
+              className="settings-logout-btn"
+              onClick={() => {
+                onClose();
+                onLogout();
+              }}
+            >
+              로그아웃
+            </button>
           </div>
 
           <div className="modal-actions">

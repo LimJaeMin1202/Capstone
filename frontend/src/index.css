@@ -27,10 +27,22 @@
   --lv-advanced-soft: #fae6e4;
 
   font-family: "Pretendard", system-ui, "Noto Sans KR", sans-serif;
-  font-size: 18px;
+  font-size: 22px;             /* 기본 = 보통 (PC) */
   line-height: 1.6;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* PC 글씨 크기 매핑 (어르신 시력 고려) */
+:root[data-font-size="small"]  { font-size: 18px; }
+:root[data-font-size="normal"] { font-size: 22px; }
+:root[data-font-size="large"]  { font-size: 26px; }
+
+/* 모바일 매핑 — 화면이 작으니 px를 한 단계 낮춤 */
+@media (max-width: 640px) {
+  :root[data-font-size="small"]  { font-size: 14px; }
+  :root[data-font-size="normal"] { font-size: 18px; }
+  :root[data-font-size="large"]  { font-size: 22px; }
 }
 
 * {

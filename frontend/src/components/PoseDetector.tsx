@@ -45,6 +45,7 @@ interface Props {
   exercise: Exercise;
   holdSeconds: number;
   mode: "rep" | "hold";        // rep: 자세 잡고 풀고 반복 / hold: 한 자세 길게 유지
+  cameraPosition: "정면" | "측면";  // 시작 오버레이 안내용
   onComplete: (stats: SessionStats) => void;
 }
 
@@ -53,7 +54,13 @@ interface Feedback {
   color: string;
 }
 
-export default function PoseDetector({ exercise, holdSeconds, mode, onComplete }: Props) {
+export default function PoseDetector({
+  exercise,
+  holdSeconds,
+  mode,
+  cameraPosition,
+  onComplete,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
@@ -144,7 +151,7 @@ export default function PoseDetector({ exercise, holdSeconds, mode, onComplete }
         detectorRef.current = detector;
 
         setPhase("ready");
-        setStatus("✅ 준비 완료! 카메라 앞에 서서 시작 버튼을 누르세요");
+        setStatus("✅ 준비 완료! 시작 버튼을 눌러주세요");
         setFeedback({
           msg: "시작 버튼을 누르면 운동이 시작돼요",
           color: "#2f9e8f",
@@ -464,14 +471,25 @@ export default function PoseDetector({ exercise, holdSeconds, mode, onComplete }
             className="cam-canvas"
           />
 
-          {/* 상태 chip (영상 좌상단, 운동 중엔 숨김) */}
+          {/* 상태 chip (좌상단) — 운동 중엔 숨김 (그땐 우측 패널 피드백이 안내) */}
           {status && phase !== "exercising" && (
             <div className="pose-status-chip">{status}</div>
           )}
 
-          {/* 준비 완료 → 시작 버튼 오버레이 */}
+          {/* 준비 완료 → 시작 버튼 오버레이 + 카메라 위치 안내 */}
           {phase === "ready" && (
-            <div className="video-overlay">
+            <div className="video-overlay video-overlay-ready">
+              <div className="ready-guide">
+                <div className="ready-guide-title">
+                  카메라를 {cameraPosition === "측면" ? "옆쪽" : "정면"} 1.5~2m
+                  거리에 두세요
+                </div>
+                <div className="ready-guide-sub">
+                  {cameraPosition === "측면"
+                    ? "이 운동은 옆모습으로 측정해요. 머리부터 발끝까지 옆모습이 보이게 해주세요."
+                    : "머리부터 발끝까지 앞모습이 전부 보이게 충분히 떨어져 주세요."}
+                </div>
+              </div>
               <button className="start-btn" onClick={handleStart}>
                 ▶ 운동 시작
               </button>

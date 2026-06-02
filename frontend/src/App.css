@@ -15,6 +15,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;             /* 모달이 화면보다 크면 배경에서 스크롤 가능 */
 }
 
 .modal-card {
@@ -24,6 +25,8 @@
   max-width: 420px;
   width: 100%;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-height: calc(100vh - 40px);  /* 화면 높이 안 넘게 */
+  overflow-y: auto;                /* 카드 자체 스크롤 */
 }
 
 .modal-title {
@@ -62,10 +65,11 @@
   .modal-backdrop {
     padding: 10px;
     align-items: flex-start;  /* 모바일에선 위쪽 정렬 (키보드 열림 대응) */
-    padding-top: 40px;
+    padding-top: 20px;
   }
   .modal-card {
     padding: 22px 18px;
+    max-height: calc(100vh - 40px);
   }
   .modal-title {
     font-size: 1.25rem;
@@ -149,6 +153,24 @@
 .settings-cancel-btn:hover:not(:disabled) {
   background: var(--surface);
   color: var(--text);
+}
+
+/* 설정 모달 안의 로그아웃 버튼 — 빨간 톤으로 명확히 구분 */
+.settings-logout-btn {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.settings-logout-btn:hover {
+  background: #fae6e4;
 }
 
 .settings-row-editing {
@@ -399,20 +421,23 @@
   align-self: center;
 }
 
-/* 설정 톱니 버튼 (사용자명 옆) */
+/* 설정 톱니 버튼 (사용자명 옆) — 글씨 크기 토글 영향 안 받게 px 고정 */
 .settings-btn {
   background: none;
   border: 1px solid var(--border);
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 22px;
+  line-height: 1;
   color: var(--text);
   transition: background 0.15s, transform 0.15s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .settings-btn:hover {
@@ -469,7 +494,7 @@
   }
 }
 
-/* 폰: wrap 허용 + 보조 요소 축소 */
+/* 폰: wrap 허용 + 보조 요소 축소 (글씨 크기 토글은 어르신용이라 모바일에서도 유지) */
 @media (max-width: 640px) {
   .navbar-inner {
     flex-wrap: wrap;
@@ -484,24 +509,35 @@
   .brand-logo {
     height: 48px;
   }
-  /* 글씨 크기 토글은 설정 모달에서도 조절 가능하니 작은 화면에선 숨김 */
+  /* 글씨 크기 토글은 컴팩트하게 — 좁아도 보이도록 */
   .font-toggle {
-    display: none;
+    margin-left: 0;
+    padding: 2px;
+  }
+  .fs-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
   }
 }
 
-/* 작은 폰: 사용자명 텍스트는 톱니 메뉴에서 확인 가능하므로 숨김 */
+/* 작은 폰: 모든 네비바 요소 유지, 컴팩트화 */
 @media (max-width: 420px) {
   .navbar-user {
-    display: none;
+    font-size: 0.85rem;
+    margin-left: 2px;
   }
   .nav-link {
-    padding: 7px 10px;
-    font-size: 0.95rem;
+    padding: 6px 9px;
+    font-size: 0.9rem;
+  }
+  .settings-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
   }
   .logout-btn {
-    padding: 7px 12px;
-    font-size: 0.9rem;
+    padding: 6px 10px;
+    font-size: 0.82rem;
   }
 }
 
@@ -1126,7 +1162,7 @@
   position: absolute;
   top: 14px;
   left: 14px;
-  z-index: 15;
+  z-index: 30;  /* 시작 버튼 오버레이(20)보다 위 — 어두워지지 않음 */
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
   padding: 8px 14px;
@@ -1177,6 +1213,62 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
   border-radius: var(--radius);
+}
+
+/* 시작 오버레이 — 안내 텍스트 + 버튼을 세로로 쌓음 */
+.video-overlay-ready {
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+}
+
+.ready-guide {
+  text-align: center;
+  color: #fff;
+  max-width: 560px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.ready-guide-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.ready-guide-sub {
+  font-size: 1rem;
+  line-height: 1.5;
+  opacity: 0.95;
+}
+
+/* 좁은 화면 — 안내 텍스트/버튼 컴팩트 + chip 자리 확보 */
+@media (max-width: 540px) {
+  .video-overlay-ready {
+    gap: 16px;
+    padding: 70px 16px 16px;   /* 상단은 chip 자리 확보 */
+  }
+  .ready-guide-title {
+    font-size: 1.05rem;
+    margin-bottom: 4px;
+  }
+  .ready-guide-sub {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .start-btn {
+    font-size: 1.2rem;
+    padding: 12px 28px;
+  }
+  .pose-status-chip {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    top: 10px;
+    left: 10px;
+    white-space: nowrap;     /* 짧은 메시지는 한 줄 유지 */
+  }
+  .video-overlay-ready {
+    padding-top: 56px;       /* chip 자리 (한 줄 분량) */
+  }
 }
 
 .start-btn {

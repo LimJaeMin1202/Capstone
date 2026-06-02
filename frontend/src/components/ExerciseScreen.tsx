@@ -28,31 +28,12 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
         </span>
       </p>
 
-      {/* 카메라 안내 — 비디오 바로 위에 두어 사용자가 확실히 보게 */}
-      <div
-        className={
-          "camera-guide-box" +
-          (guide.cameraPosition === "측면" ? " camera-guide-box-side" : "")
-        }
-      >
-        <div className="camera-guide-text">
-          <strong>
-            카메라를 {guide.cameraPosition === "측면" ? "옆쪽" : "정면"} 1.5~2m
-            거리에 두세요
-          </strong>
-          <div className="camera-guide-sub">
-            {guide.cameraPosition === "측면"
-              ? "이 운동은 옆모습으로 측정해요. 머리부터 발끝까지 옆모습이 전부 보이게 카메라를 멀리 배치해주세요."
-              : "머리부터 발끝까지 앞모습이 전부 보이게 카메라에서 충분히 떨어져 주세요."}
-          </div>
-        </div>
-      </div>
-
       <PoseDetector
         key={exercise.id}
         exercise={exercise}
         holdSeconds={guide.holdSeconds}
         mode={guide.mode}
+        cameraPosition={guide.cameraPosition}
         onComplete={onComplete}
       />
 

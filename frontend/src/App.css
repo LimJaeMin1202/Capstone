@@ -57,6 +57,30 @@
   }
 }
 
+/* 모달 모바일 — 패딩 줄이고 좁은 화면에서 가득 채움 */
+@media (max-width: 540px) {
+  .modal-backdrop {
+    padding: 10px;
+    align-items: flex-start;  /* 모바일에선 위쪽 정렬 (키보드 열림 대응) */
+    padding-top: 40px;
+  }
+  .modal-card {
+    padding: 22px 18px;
+  }
+  .modal-title {
+    font-size: 1.25rem;
+  }
+  /* 설정 row가 좁은 화면에선 wrap → 라벨 위, 값+버튼 아래 */
+  .settings-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .settings-row-label {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+
 /* 설정 모달 내부 — 항목 섹션 */
 .settings-section {
   margin-bottom: 20px;
@@ -412,6 +436,75 @@
   color: var(--danger);
 }
 
+/* ===== 네비바 모바일 대응 ===== */
+/* 태블릿: 간격 좁힘 */
+@media (max-width: 1024px) {
+  .navbar-nav {
+    gap: 6px;
+  }
+  .nav-link {
+    padding: 9px 14px;
+  }
+}
+
+/* 작은 태블릿/큰 폰: 로고 축소, 토글 컴팩트 */
+@media (max-width: 820px) {
+  .brand-logo {
+    height: 56px;
+  }
+  .nav-link {
+    font-size: 1rem;
+    padding: 8px 12px;
+  }
+  .font-toggle {
+    margin-left: 4px;
+  }
+  .fs-btn {
+    padding: 5px 9px;
+    font-size: 0.78rem;
+  }
+  .navbar-user {
+    font-size: 0.95rem;
+    margin-left: 4px;
+  }
+}
+
+/* 폰: wrap 허용 + 보조 요소 축소 */
+@media (max-width: 640px) {
+  .navbar-inner {
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .navbar-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex: 1 1 auto;
+  }
+  .brand-logo {
+    height: 48px;
+  }
+  /* 글씨 크기 토글은 설정 모달에서도 조절 가능하니 작은 화면에선 숨김 */
+  .font-toggle {
+    display: none;
+  }
+}
+
+/* 작은 폰: 사용자명 텍스트는 톱니 메뉴에서 확인 가능하므로 숨김 */
+@media (max-width: 420px) {
+  .navbar-user {
+    display: none;
+  }
+  .nav-link {
+    padding: 7px 10px;
+    font-size: 0.95rem;
+  }
+  .logout-btn {
+    padding: 7px 12px;
+    font-size: 0.9rem;
+  }
+}
+
 /* ===== 로그인/회원가입 ===== */
 .auth-wrap {
   min-height: 100vh;
@@ -601,6 +694,41 @@
   margin: 0 0 28px;
 }
 
+/* ===== 페이지 헤더 / 운동 화면 모바일 ===== */
+@media (max-width: 768px) {
+  .main {
+    padding: 20px 16px 50px;
+  }
+  .page-title {
+    font-size: 1.5rem;
+  }
+  .exercise-title {
+    font-size: 1.4rem;
+  }
+  .page-sub {
+    font-size: 1rem;
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-title {
+    font-size: 1.35rem;
+  }
+  .exercise-title {
+    font-size: 1.25rem;
+  }
+  .exercise-guide-img {
+    flex: 0 0 100%;        /* 가이드 이미지가 너비 다 차지 → 위쪽 큰 이미지 */
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .back-btn {
+    padding: 8px 14px;
+    font-size: 0.95rem;
+  }
+}
+
 /* ===== 운동 선택 ===== */
 .category-section {
   margin-bottom: 36px;
@@ -626,6 +754,30 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
+}
+
+/* 모바일: 좁은 화면에서도 2열 유지 (1열만 나오면 카드가 너무 큼) */
+@media (max-width: 540px) {
+  .exercise-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .exercise-card {
+    padding: 12px;
+  }
+  .exercise-card-name {
+    font-size: 1rem;
+  }
+  .exercise-card-part {
+    font-size: 0.85rem;
+  }
+}
+
+/* 진짜 좁은 폰만 1열 (360px 이하) */
+@media (max-width: 360px) {
+  .exercise-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .exercise-card {

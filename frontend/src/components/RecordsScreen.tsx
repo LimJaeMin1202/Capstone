@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchRecords, type ExerciseRecord } from "../api/records";
 import { fetchExercises } from "../api/exercises";
+import { fetchMyGoal, type UserGoal } from "../api/goals";
 
 interface Summary {
   exerciseId: string;
@@ -143,12 +144,14 @@ function computeStats(records: ExerciseRecord[]): WeeklyStats {
 export default function RecordsScreen() {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
+  const [goal, setGoal] = useState<UserGoal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchRecords(), fetchExercises()])
-      .then(([records, exercises]) => {
+    Promise.all([fetchRecords(), fetchExercises(), fetchMyGoal()])
+      .then(([records, exercises, userGoal]) => {
+        setGoal(userGoal);
         const nameMap: Record<string, string> = {};
         for (const ex of exercises) nameMap[ex.id] = ex.name;
 
@@ -188,20 +191,20 @@ export default function RecordsScreen() {
   if (loading) return <p className="state-msg">기록 불러오는 중...</p>;
   if (error) return <p className="state-msg error">❌ {error}</p>;
 
-  // 기록 자체가 없을 때
-  if (summaries.length === 0)
-    return (
-      <p className="empty-msg">
-        아직 운동 기록이 없어요.
-        <br />
-        운동을 완료하면 여기에 기록이 쌓여요! 💪
-      </p>
-    );
-
   return (
     <div className="records-screen">
       {/* 한 줄 피드백 메시지 */}
       {stats && <div className="records-feedback">{stats.feedback}</div>}
+
+      {/* 이번 주 목표 진행바 */}
+      {goal && stats && (
+        <GoalProgressCard
+          sessionsDone={stats.thisWeekSessions}
+          minutesDone={stats.thisWeekMinutes}
+          sessionTarget={goal.weeklySessionTarget}
+          minuteTarget={goal.weeklyMinuteTarget}
+        />
+      )}
 
       {/* 상단 요약 4카드 */}
       {stats && (
@@ -241,6 +244,13 @@ export default function RecordsScreen() {
       {/* 운동별 카드 */}
       <section className="records-section">
         <h3 className="records-section-title">📋 운동별 기록</h3>
+        {summaries.length === 0 ? (
+          <p className="empty-msg">
+            아직 운동 기록이 없어요.
+            <br />
+            운동을 완료하면 여기에 쌓여요! 💪
+          </p>
+        ) : (
         <div className="records-list">
           {summaries.map((s) => (
             <div key={s.exerciseId} className="record-card">
@@ -268,7 +278,89 @@ export default function RecordsScreen() {
             </div>
           ))}
         </div>
+        )}
       </section>
+    </div>
+  );
+}
+
+// 이번 주 목표 진행바 — 횟수/시간 둘 다 표시
+function GoalProgressCard({
+  sessionsDone,
+  minutesDone,
+  sessionTarget,
+  minuteTarget,
+}: {
+  sessionsDone: number;
+  minutesDone: number;
+  sessionTarget: number;
+  minuteTarget: number;
+}) {
+  const sessionPct = Math.min(100, Math.round((sessionsDone / sessionTarget) * 100));
+  const minutePct = Math.min(100, Math.round((minutesDone / minuteTarget) * 100));
+  const sessionDone = sessionsDone >= sessionTarget;
+  const minuteDone = minutesDone >= minuteTarget;
+  const allDone = sessionDone && minuteDone;
+
+  return (
+    <div className={"goal-card" + (allDone ? " goal-card-done" : "")}>
+      <div className="goal-card-head">
+        <span className="goal-card-title">🎯 이번 주 목표</span>
+        {allDone && <span className="goal-card-badge">달성!</span>}
+      </div>
+      <GoalRow
+        label="운동 횟수"
+        done={sessionsDone}
+        target={sessionTarget}
+        unit="회"
+        pct={sessionPct}
+        complete={sessionDone}
+      />
+      <GoalRow
+        label="운동 시간"
+        done={minutesDone}
+        target={minuteTarget}
+        unit="분"
+        pct={minutePct}
+        complete={minuteDone}
+      />
+    </div>
+  );
+}
+
+function GoalRow({
+  label,
+  done,
+  target,
+  unit,
+  pct,
+  complete,
+}: {
+  label: string;
+  done: number;
+  target: number;
+  unit: string;
+  pct: number;
+  complete: boolean;
+}) {
+  return (
+    <div className="goal-row">
+      <div className="goal-row-head">
+        <span className="goal-row-label">{label}</span>
+        <span className="goal-row-num">
+          <b>{done}</b>
+          <span className="goal-row-target">
+            {" "}/ {target}{unit}
+          </span>
+          {complete && <span className="goal-row-check"> ✓</span>}
+        </span>
+      </div>
+      <div className="goal-bar">
+        <div
+          className={"goal-bar-fill" + (complete ? " goal-bar-fill-done" : "")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }

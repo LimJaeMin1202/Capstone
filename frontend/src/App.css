@@ -149,6 +149,49 @@
   background: #fff;
 }
 
+/* 목표 편집 영역 — 세로 스택 (input 2개 + 액션 버튼) */
+.settings-row-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.settings-goal-inputs {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.settings-goal-input-label {
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.settings-goal-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-goal-input-wrap .settings-row-input {
+  flex: 1;
+}
+
+.settings-goal-input-unit {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.settings-goal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* 모달 하단 액션 버튼 영역 (취소 + 확인) */
 .modal-actions {
   display: flex;
@@ -1138,6 +1181,97 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* 이번 주 목표 진행바 카드 */
+.goal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.goal-card-done {
+  background: linear-gradient(135deg, var(--primary-soft) 0%, #ffffff 100%);
+  border-color: var(--primary);
+}
+
+.goal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.goal-card-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.goal-card-badge {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+}
+
+.goal-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.goal-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.goal-row-label {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.goal-row-num {
+  color: var(--text-muted);
+}
+
+.goal-row-num b {
+  color: var(--primary-dark);
+  font-size: 1.15rem;
+}
+
+.goal-row-target {
+  font-size: 0.95rem;
+}
+
+.goal-row-check {
+  color: var(--success);
+  font-weight: 800;
+}
+
+.goal-bar {
+  height: 12px;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goal-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.goal-bar-fill-done {
+  background: var(--success);
 }
 
 /* 한 줄 피드백 메시지 */

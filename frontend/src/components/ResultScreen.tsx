@@ -9,12 +9,21 @@ interface Props {
   onRecords: () => void;
 }
 
-// 정확도에 따른 축하 메시지
-function getCelebration(accuracy: number): {
+// 운동 횟수 + 정확도에 따른 축하 메시지
+// 횟수 0이면 정확도와 무관하게 격려 메시지
+function getCelebration(goodCount: number, accuracy: number): {
   emoji: string;
   title: string;
   message: string;
 } {
+  if (goodCount === 0) {
+    return {
+      emoji: "🙏",
+      title: "오늘은 여기까지 해도 괜찮아요",
+      message:
+        "카메라 위치나 자세가 잘 잡히지 않았을 수 있어요. 가이드를 다시 보고 천천히 시도해 보세요.",
+    };
+  }
   if (accuracy >= 90) {
     return {
       emoji: "🎉",
@@ -56,7 +65,7 @@ export default function ResultScreen({
   onAnother,
   onRecords,
 }: Props) {
-  const celebration = getCelebration(stats.accuracy);
+  const celebration = getCelebration(stats.goodCount, stats.accuracy);
 
   return (
     <div className="result-wrap">
@@ -82,7 +91,7 @@ export default function ResultScreen({
       <div className="result-stats">
         <div className="result-stat">
           <div className="result-stat-value">{stats.goodCount}</div>
-          <div className="result-stat-label">정확한 자세 횟수</div>
+          <div className="result-stat-label">운동 횟수</div>
         </div>
         <div className="result-stat">
           <div className="result-stat-value">{formatDuration(stats.duration)}</div>

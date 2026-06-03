@@ -1,4 +1,6 @@
-export const API_BASE = "http://localhost:8080";
+// dev: localhost:8080 (백엔드 dev 서버)
+// 배포: VITE_API_BASE를 빈 문자열로 두면 nginx가 같은 도메인에서 /api proxy
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8080";
 
 const TOKEN_KEY = "capstone-token";
 

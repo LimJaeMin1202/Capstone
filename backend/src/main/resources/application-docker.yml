@@ -1,0 +1,31 @@
+# Docker 배포 전용 프로필 — 시크릿은 환경변수로 주입 (git에 commit 안전)
+# SPRING_PROFILES_ACTIVE=docker 로 활성화
+
+spring:
+  application:
+    name: capstone-backend
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  validity-ms: ${JWT_VALIDITY_MS:86400000}
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+  client-secret: ${KAKAO_CLIENT_SECRET}

@@ -1,0 +1,21 @@
+# 빌드 산출물
+build/
+.gradle/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 시크릿 — 컨테이너에는 환경변수로 주입하므로 절대 포함 X
+src/main/resources/application.yml
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore

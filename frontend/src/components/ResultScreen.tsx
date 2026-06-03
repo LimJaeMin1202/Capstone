@@ -57,11 +57,12 @@ function getCelebration(stats: SessionStats): {
   };
 }
 
+// 60초 미만은 "45초", 그 이상은 "1:13" (M:SS) — 카드 안에 한 줄로 들어가게
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds}초`;
   const min = Math.floor(seconds / 60);
   const sec = seconds % 60;
-  return sec === 0 ? `${min}분` : `${min}분 ${sec}초`;
+  return `${min}:${String(sec).padStart(2, "0")}`;
 }
 
 export default function ResultScreen({

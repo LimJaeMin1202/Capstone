@@ -1237,20 +1237,19 @@
   aspect-ratio: 4 / 3;
 }
 
-/* 전체화면 토글 버튼 (영상 우하단) */
+/* 전체화면 토글 버튼 (영상 우하단) — 시작 오버레이(z:20)보다 위로 띄움 */
 .fullscreen-btn {
   position: absolute;
   bottom: 14px;
   right: 14px;
-  z-index: 16;
+  z-index: 30;
   width: 44px;
   height: 44px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.6);
   border: none;
   color: #fff;
-  font-size: 18px;
-  line-height: 1;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2038,6 +2037,9 @@
   font-size: 2rem;
   font-weight: 800;
   color: var(--primary-dark);
+  line-height: 1.15;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .result-stat-label {

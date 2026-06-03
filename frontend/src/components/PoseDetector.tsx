@@ -513,7 +513,35 @@ export default function PoseDetector({
               aria-label={isFullscreen ? "전체화면 끄기" : "전체화면"}
               title={isFullscreen ? "전체화면 끄기" : "전체화면"}
             >
-              {isFullscreen ? "⤡" : "⛶"}
+              {isFullscreen ? (
+                // 축소 — 모서리 L자가 안쪽을 향함
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" />
+                </svg>
+              ) : (
+                // 확대 — 모서리 L자가 바깥을 향함
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" />
+                </svg>
+              )}
             </button>
 
           {/* 상태 chip (좌상단) — 운동 중엔 숨김 (그땐 우측 패널 피드백이 안내) */}

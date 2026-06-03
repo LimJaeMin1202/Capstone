@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fetchRecords, type ExerciseRecord } from "../api/records";
 import { fetchExercises } from "../api/exercises";
 import { fetchMyGoal, type UserGoal } from "../api/goals";
@@ -20,11 +21,14 @@ interface DailyBar {
 }
 
 interface WeeklyStats {
-  thisWeekSessions: number;
-  thisWeekMinutes: number;
-  avgAccuracy: number;
-  streak: number;
-  daily: DailyBar[];
+  weekStart: Date;          // 주 시작 (월요일)
+  weekEnd: Date;            // 주 끝 (일요일)
+  weekOffset: number;       // 0=이번주, -1=지난주, ...
+  weekSessions: number;
+  weekMinutes: number;
+  avgAccuracy: number;      // 전체 평균 (주 무관)
+  streak: number;           // 오늘 기준 연속일 (주 무관)
+  daily: DailyBar[];        // 해당 주의 월~일
   feedback: string;
 }
 
@@ -33,6 +37,15 @@ function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
+}
+
+// 그 날짜가 속한 주의 월요일 (한국 기준 월요일 시작)
+function startOfWeek(d: Date): Date {
+  const day = d.getDay(); // 0(일) ~ 6(토)
+  const offset = day === 0 ? -6 : 1 - day;
+  const monday = startOfDay(d);
+  monday.setDate(monday.getDate() + offset);
+  return monday;
 }
 
 function daysAgo(n: number): Date {
@@ -55,24 +68,46 @@ function formatDate(iso?: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// ===== 통계 계산 =====
-function computeStats(records: ExerciseRecord[]): WeeklyStats {
-  const today = startOfDay(new Date());
-  const sevenDaysAgo = daysAgo(6); // 오늘 포함 7일
+function formatDateShort(d: Date): string {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
-  const thisWeek = records.filter(
-    (r) => r.createdAt && new Date(r.createdAt) >= sevenDaysAgo
-  );
-  const lastWeek = records.filter((r) => {
+function weekLabel(offset: number): string {
+  if (offset === 0) return "이번 주";
+  if (offset === -1) return "지난 주";
+  return `${-offset}주 전`;
+}
+
+// ===== 통계 계산 (weekOffset 기준 주) =====
+function computeStats(records: ExerciseRecord[], weekOffset: number): WeeklyStats {
+  const today = startOfDay(new Date());
+  const thisMonday = startOfWeek(today);
+
+  // 선택한 주의 월요일 / 일요일
+  const weekStart = new Date(thisMonday);
+  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  // 직전 주의 월/일 (피드백 메시지 비교용)
+  const prevStart = new Date(weekStart);
+  prevStart.setDate(prevStart.getDate() - 7);
+  const prevEnd = new Date(weekStart);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+
+  function inRange(r: ExerciseRecord, from: Date, to: Date): boolean {
     if (!r.createdAt) return false;
     const d = new Date(r.createdAt);
-    const start = daysAgo(13);
-    return d >= start && d < sevenDaysAgo;
-  });
+    const dayStart = startOfDay(d);
+    return dayStart >= from && dayStart <= to;
+  }
 
-  const thisWeekSessions = thisWeek.length;
-  const thisWeekMinutes = Math.round(
-    thisWeek.reduce((s, r) => s + r.duration, 0) / 60
+  const weekRecs = records.filter((r) => inRange(r, weekStart, weekEnd));
+  const prevRecs = records.filter((r) => inRange(r, prevStart, prevEnd));
+
+  const weekSessions = weekRecs.length;
+  const weekMinutes = Math.round(
+    weekRecs.reduce((s, r) => s + r.duration, 0) / 60
   );
   const avgAccuracy =
     records.length > 0
@@ -81,7 +116,7 @@ function computeStats(records: ExerciseRecord[]): WeeklyStats {
         )
       : 0;
 
-  // streak: 오늘부터 거꾸로 운동한 날 세기 (오늘 안 했어도 어제부터 셈)
+  // streak는 항상 오늘 기준
   const exerciseDays = new Set(
     records
       .filter((r) => r.createdAt)
@@ -89,7 +124,6 @@ function computeStats(records: ExerciseRecord[]): WeeklyStats {
   );
   let streak = 0;
   let cursor = 0;
-  // 오늘이 없으면 어제부터 시작
   if (!exerciseDays.has(today.getTime())) cursor = 1;
   for (let i = cursor; i < 365; i++) {
     const d = daysAgo(i);
@@ -97,42 +131,54 @@ function computeStats(records: ExerciseRecord[]): WeeklyStats {
     else break;
   }
 
-  // 최근 7일 막대그래프
-  const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
+  // 선택한 주의 월~일 막대그래프
+  const dayLabels = ["월", "화", "수", "목", "금", "토", "일"];
   const daily: DailyBar[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = daysAgo(i);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
     const count = records.filter(
       (r) => r.createdAt && isSameDay(new Date(r.createdAt), d)
     ).length;
     daily.push({
-      label: dayLabels[d.getDay()],
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      label: dayLabels[i],
+      date: formatDateShort(d),
       count,
-      isToday: i === 0,
+      isToday: isSameDay(d, today),
     });
   }
 
-  // 피드백 메시지
+  // 피드백 메시지 (주 기준)
   let feedback = "";
-  const diff = thisWeekSessions - lastWeek.length;
-  if (records.length === 0) {
-    feedback = "🌱 첫 운동을 시작해볼까요?";
-  } else if (thisWeekSessions === 0) {
-    feedback = "🌿 이번 주는 아직 운동이 없어요. 한 번만 해볼까요?";
-  } else if (lastWeek.length === 0) {
-    feedback = `🎉 이번 주 ${thisWeekSessions}번 운동, 좋은 시작이에요!`;
-  } else if (diff > 0) {
-    feedback = `🚀 이번 주 ${thisWeekSessions}번, 지난주보다 ${diff}번 더 하셨어요!`;
-  } else if (diff < 0) {
-    feedback = `✨ 이번 주 ${thisWeekSessions}번. 지난주만큼 한 번 더 어떠세요?`;
+  if (weekOffset === 0) {
+    const diff = weekSessions - prevRecs.length;
+    if (records.length === 0) {
+      feedback = "🌱 첫 운동을 시작해볼까요?";
+    } else if (weekSessions === 0) {
+      feedback = "🌿 이번 주는 아직 운동이 없어요. 한 번만 해볼까요?";
+    } else if (prevRecs.length === 0) {
+      feedback = `🎉 이번 주 ${weekSessions}번 운동, 좋은 시작이에요!`;
+    } else if (diff > 0) {
+      feedback = `🚀 이번 주 ${weekSessions}번, 지난주보다 ${diff}번 더 하셨어요!`;
+    } else if (diff < 0) {
+      feedback = `✨ 이번 주 ${weekSessions}번. 지난주만큼 한 번 더 어떠세요?`;
+    } else {
+      feedback = `👏 이번 주 ${weekSessions}번, 꾸준히 잘 하고 계세요!`;
+    }
   } else {
-    feedback = `👏 이번 주 ${thisWeekSessions}번, 꾸준히 잘 하고 계세요!`;
+    if (weekSessions === 0) {
+      feedback = `📅 ${weekLabel(weekOffset)}는 운동 기록이 없어요.`;
+    } else {
+      feedback = `📅 ${weekLabel(weekOffset)}는 ${weekSessions}번 운동하셨네요.`;
+    }
   }
 
   return {
-    thisWeekSessions,
-    thisWeekMinutes,
+    weekStart,
+    weekEnd,
+    weekOffset,
+    weekSessions,
+    weekMinutes,
     avgAccuracy,
     streak,
     daily,
@@ -142,65 +188,86 @@ function computeStats(records: ExerciseRecord[]): WeeklyStats {
 
 // ===== 컴포넌트 =====
 export default function RecordsScreen() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const weekOffset = clampOffset(Number(searchParams.get("week") ?? "0"));
+
+  const [records, setRecords] = useState<ExerciseRecord[]>([]);
   const [summaries, setSummaries] = useState<Summary[]>([]);
-  const [stats, setStats] = useState<WeeklyStats | null>(null);
   const [goal, setGoal] = useState<UserGoal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([fetchRecords(), fetchExercises(), fetchMyGoal()])
-      .then(([records, exercises, userGoal]) => {
+      .then(([recs, exercises, userGoal]) => {
+        setRecords(recs);
         setGoal(userGoal);
         const nameMap: Record<string, string> = {};
         for (const ex of exercises) nameMap[ex.id] = ex.name;
 
-        // 운동별 그룹핑
         const grouped: Record<string, ExerciseRecord[]> = {};
-        for (const r of records) {
+        for (const r of recs) {
           (grouped[r.exerciseId] ??= []).push(r);
         }
-
-        const result: Summary[] = Object.entries(grouped).map(([id, recs]) => {
-          const totalGood = recs.reduce((s, r) => s + r.goodCount, 0);
+        const result: Summary[] = Object.entries(grouped).map(([id, list]) => {
+          const totalGood = list.reduce((s, r) => s + r.goodCount, 0);
           const avgAccuracy = Math.round(
-            recs.reduce((s, r) => s + r.accuracy, 0) / recs.length
+            list.reduce((s, r) => s + r.accuracy, 0) / list.length
           );
-          const lastDate = recs
-            .map((r) => r.createdAt ?? "")
-            .sort()
-            .at(-1);
+          const lastDate = list.map((r) => r.createdAt ?? "").sort().at(-1);
           return {
             exerciseId: id,
             name: nameMap[id] ?? id,
-            sessions: recs.length,
+            sessions: list.length,
             totalGood,
             avgAccuracy,
             lastDate: lastDate ?? "",
           };
         });
-
         result.sort((a, b) => b.lastDate.localeCompare(a.lastDate));
         setSummaries(result);
-        setStats(computeStats(records));
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // searchParams 변경마다 stats 다시 계산 (records 그대로 두고)
+  const stats = records.length >= 0 ? computeStats(records, weekOffset) : null;
+
+  function changeWeek(delta: number) {
+    const next = clampOffset(weekOffset + delta);
+    if (next === 0) {
+      setSearchParams({}, { replace: false });
+    } else {
+      setSearchParams({ week: String(next) }, { replace: false });
+    }
+  }
 
   if (loading) return <p className="state-msg">기록 불러오는 중...</p>;
   if (error) return <p className="state-msg error">❌ {error}</p>;
 
   return (
     <div className="records-screen">
+      {/* 주 선택 컨트롤 */}
+      {stats && (
+        <WeekNav
+          weekStart={stats.weekStart}
+          weekEnd={stats.weekEnd}
+          weekOffset={stats.weekOffset}
+          onPrev={() => changeWeek(-1)}
+          onNext={() => changeWeek(+1)}
+        />
+      )}
+
       {/* 한 줄 피드백 메시지 */}
       {stats && <div className="records-feedback">{stats.feedback}</div>}
 
-      {/* 이번 주 목표 진행바 */}
+      {/* 목표 진행바 (이번 주 / 과거 주 모두 같은 목표 기준) */}
       {goal && stats && (
         <GoalProgressCard
-          sessionsDone={stats.thisWeekSessions}
-          minutesDone={stats.thisWeekMinutes}
+          weekOffset={stats.weekOffset}
+          sessionsDone={stats.weekSessions}
+          minutesDone={stats.weekMinutes}
           sessionTarget={goal.weeklySessionTarget}
           minuteTarget={goal.weeklyMinuteTarget}
         />
@@ -210,14 +277,14 @@ export default function RecordsScreen() {
       {stats && (
         <div className="records-summary-grid">
           <SummaryCard
-            value={stats.thisWeekSessions}
+            value={stats.weekSessions}
             unit="회"
-            label="이번 주 운동"
+            label={`${weekLabel(stats.weekOffset)} 운동`}
           />
           <SummaryCard
-            value={stats.thisWeekMinutes}
+            value={stats.weekMinutes}
             unit="분"
-            label="이번 주 시간"
+            label={`${weekLabel(stats.weekOffset)} 시간`}
           />
           <SummaryCard
             value={stats.avgAccuracy}
@@ -236,7 +303,9 @@ export default function RecordsScreen() {
       {/* 주간 추세 막대그래프 */}
       {stats && (
         <section className="records-section">
-          <h3 className="records-section-title">📈 최근 7일 운동 추세</h3>
+          <h3 className="records-section-title">
+            📈 {weekLabel(stats.weekOffset)} 운동 추세
+          </h3>
           <WeeklyBars daily={stats.daily} />
         </section>
       )}
@@ -251,46 +320,146 @@ export default function RecordsScreen() {
             운동을 완료하면 여기에 쌓여요! 💪
           </p>
         ) : (
-        <div className="records-list">
-          {summaries.map((s) => (
-            <div key={s.exerciseId} className="record-card">
-              <div className="record-head">
-                <span className="record-name">{s.name}</span>
-                <span className="record-date">최근 {formatDate(s.lastDate)}</span>
+          <div className="records-list">
+            {summaries.map((s) => (
+              <div key={s.exerciseId} className="record-card">
+                <div className="record-head">
+                  <span className="record-name">{s.name}</span>
+                  <span className="record-date">최근 {formatDate(s.lastDate)}</span>
+                </div>
+                <div className="record-stats">
+                  <span>
+                    실시 <b>{s.sessions}회</b>
+                  </span>
+                  <span>
+                    누적 자세 <b>{s.totalGood}회</b>
+                  </span>
+                  <span>
+                    평균 정확도 <b>{s.avgAccuracy}%</b>
+                  </span>
+                </div>
+                <div className="record-bar">
+                  <div
+                    className="record-bar-fill"
+                    style={{ width: `${s.avgAccuracy}%` }}
+                  />
+                </div>
               </div>
-              <div className="record-stats">
-                <span>
-                  실시 <b>{s.sessions}회</b>
-                </span>
-                <span>
-                  누적 자세 <b>{s.totalGood}회</b>
-                </span>
-                <span>
-                  평균 정확도 <b>{s.avgAccuracy}%</b>
-                </span>
-              </div>
-              <div className="record-bar">
-                <div
-                  className="record-bar-fill"
-                  style={{ width: `${s.avgAccuracy}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
       </section>
     </div>
   );
 }
 
-// 이번 주 목표 진행바 — 횟수/시간 둘 다 표시
+// 너무 과거(52주 전)나 미래(0 초과)는 막음
+function clampOffset(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n > 0) return 0;
+  if (n < -52) return -52;
+  return Math.round(n);
+}
+
+// 주 선택 컨트롤
+function WeekNav({
+  weekStart,
+  weekEnd,
+  weekOffset,
+  onPrev,
+  onNext,
+}: {
+  weekStart: Date;
+  weekEnd: Date;
+  weekOffset: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="week-nav">
+      <button
+        type="button"
+        className="week-nav-btn"
+        onClick={onPrev}
+        aria-label="이전 주"
+      >
+        ← 이전 주
+      </button>
+      <div className="week-nav-label">
+        <span className="week-nav-desc">{weekLabel(weekOffset)}</span>
+        <span className="week-nav-range">
+          {formatDateShort(weekStart)} ~ {formatDateShort(weekEnd)}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="week-nav-btn"
+        onClick={onNext}
+        disabled={weekOffset >= 0}
+        aria-label="다음 주"
+      >
+        다음 주 →
+      </button>
+    </div>
+  );
+}
+
+function SummaryCard({
+  value,
+  unit,
+  label,
+  highlight,
+}: {
+  value: number;
+  unit: string;
+  label: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`summary-card ${highlight ? "summary-card-highlight" : ""}`}>
+      <div className="summary-card-value">
+        {value}
+        <span className="summary-card-unit">{unit}</span>
+      </div>
+      <div className="summary-card-label">{label}</div>
+    </div>
+  );
+}
+
+function WeeklyBars({ daily }: { daily: DailyBar[] }) {
+  const max = Math.max(1, ...daily.map((d) => d.count));
+  return (
+    <div className="weekly-bars">
+      {daily.map((d, i) => {
+        const heightPct = (d.count / max) * 100;
+        return (
+          <div key={i} className="weekly-bar-col">
+            <div className="weekly-bar-track">
+              {d.count > 0 && <div className="weekly-bar-num">{d.count}</div>}
+              <div
+                className={`weekly-bar ${d.isToday ? "weekly-bar-today" : ""}`}
+                style={{ height: `${Math.max(heightPct, d.count > 0 ? 6 : 0)}%` }}
+              />
+            </div>
+            <div className={`weekly-bar-label ${d.isToday ? "today" : ""}`}>
+              {d.label}
+            </div>
+            <div className="weekly-bar-date">{d.date}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function GoalProgressCard({
+  weekOffset,
   sessionsDone,
   minutesDone,
   sessionTarget,
   minuteTarget,
 }: {
+  weekOffset: number;
   sessionsDone: number;
   minutesDone: number;
   sessionTarget: number;
@@ -305,7 +474,9 @@ function GoalProgressCard({
   return (
     <div className={"goal-card" + (allDone ? " goal-card-done" : "")}>
       <div className="goal-card-head">
-        <span className="goal-card-title">🎯 이번 주 목표</span>
+        <span className="goal-card-title">
+          🎯 {weekLabel(weekOffset)} 목표
+        </span>
         {allDone && <span className="goal-card-badge">달성!</span>}
       </div>
       <GoalRow
@@ -361,57 +532,6 @@ function GoalRow({
           style={{ width: `${pct}%` }}
         />
       </div>
-    </div>
-  );
-}
-
-// ===== 작은 컴포넌트 =====
-function SummaryCard({
-  value,
-  unit,
-  label,
-  highlight,
-}: {
-  value: number;
-  unit: string;
-  label: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className={`summary-card ${highlight ? "summary-card-highlight" : ""}`}>
-      <div className="summary-card-value">
-        {value}
-        <span className="summary-card-unit">{unit}</span>
-      </div>
-      <div className="summary-card-label">{label}</div>
-    </div>
-  );
-}
-
-function WeeklyBars({ daily }: { daily: DailyBar[] }) {
-  const max = Math.max(1, ...daily.map((d) => d.count));
-  return (
-    <div className="weekly-bars">
-      {daily.map((d, i) => {
-        const heightPct = (d.count / max) * 100;
-        return (
-          <div key={i} className="weekly-bar-col">
-            <div className="weekly-bar-track">
-              {d.count > 0 && (
-                <div className="weekly-bar-num">{d.count}</div>
-              )}
-              <div
-                className={`weekly-bar ${d.isToday ? "weekly-bar-today" : ""}`}
-                style={{ height: `${Math.max(heightPct, d.count > 0 ? 6 : 0)}%` }}
-              />
-            </div>
-            <div className={`weekly-bar-label ${d.isToday ? "today" : ""}`}>
-              {d.label}
-            </div>
-            <div className="weekly-bar-date">{d.date}</div>
-          </div>
-        );
-      })}
     </div>
   );
 }

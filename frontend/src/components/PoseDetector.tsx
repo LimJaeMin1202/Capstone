@@ -509,6 +509,18 @@ export default function PoseDetector({
           {phase === "exercising" && holdCountdown !== null && (
             <div className="hold-countdown-badge">{holdCountdown}</div>
           )}
+
+          {/* 운동 중 핵심 통계 (영상 좌상단) — 모바일에서 패널 안 보여도 횟수 확인 가능 */}
+          {phase === "exercising" && (
+            <div className="pose-count-overlay">
+              <div className="pose-count-value">
+                {mode === "hold" ? `${totalHoldSec}` : `${count}`}
+              </div>
+              <div className="pose-count-label">
+                {mode === "hold" ? "초 유지" : "회"}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

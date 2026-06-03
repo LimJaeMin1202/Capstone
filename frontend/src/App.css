@@ -1138,6 +1138,49 @@
   min-width: 0;
 }
 
+/* 운동 중 영상 좌상단 — 횟수/유지시간을 큰 글씨로 항상 보이게 */
+.pose-count-overlay {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 14;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.pose-count-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pose-count-label {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  font-weight: 600;
+}
+
+@media (max-width: 540px) {
+  .pose-count-overlay {
+    top: 10px;
+    left: 10px;
+    padding: 8px 14px;
+  }
+  .pose-count-value {
+    font-size: 1.4rem;
+  }
+  .pose-count-label {
+    font-size: 0.75rem;
+  }
+}
+
 /* 영상 좌상단 상태 chip (모델 로딩 진행도 등) */
 .pose-status-chip {
   position: absolute;

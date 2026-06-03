@@ -63,6 +63,7 @@ export default function PoseDetector({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoWrapRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -116,6 +117,31 @@ export default function PoseDetector({
   const [holdCountdown, setHoldCountdown] = useState<number | null>(null);
   // hold 모드용: 누적 유지 시간 (초)
   const [totalHoldSec, setTotalHoldSec] = useState(0);
+  // 전체화면 상태 (Fullscreen API)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // 브라우저의 fullscreenchange 이벤트를 듣고 상태 동기화 (ESC도 자동 처리됨)
+  useEffect(() => {
+    function handler() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  async function toggleFullscreen() {
+    const el = videoWrapRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await el.requestFullscreen();
+      }
+    } catch {
+      // iOS Safari 등에서 div 전체화면 미지원
+    }
+  }
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -297,9 +323,16 @@ export default function PoseDetector({
             releaseStartRef.current = null;
             if (inPose || recentlyInPose) {
               const held = now - (holdStartRef.current ?? now);
-              if (held >= holdMs) {
+              // 카운트다운 흐름: N → ... → 1 → 0 → satisfied
+              // 0을 잠깐 보여주기 위해 satisfied 진입을 400ms 늦춤
+              const ZERO_HOLD_MS = 400;
+              if (held >= holdMs + ZERO_HOLD_MS) {
                 repPhaseRef.current = "satisfied";
                 msg = "✨ 충분해요! 천천히 내려놓으세요";
+                color = "#1e9e54";
+              } else if (held >= holdMs) {
+                countdownDisplay = 0;
+                msg = "✨ 거의 다 됐어요!";
                 color = "#1e9e54";
               } else {
                 const remaining = Math.max(1, Math.ceil((holdMs - held) / 1000));
@@ -462,14 +495,26 @@ export default function PoseDetector({
   return (
     <div className="pose-area">
       <div className="pose-video-col">
-        <div className="video-wrap">
-          <video ref={videoRef} autoPlay playsInline className="cam-video" />
-          <canvas
-            ref={canvasRef}
-            width={VIDEO_WIDTH}
-            height={VIDEO_HEIGHT}
-            className="cam-canvas"
-          />
+        <div className="video-wrap" ref={videoWrapRef}>
+          <div className="video-inner">
+            <video ref={videoRef} autoPlay playsInline className="cam-video" />
+            <canvas
+              ref={canvasRef}
+              width={VIDEO_WIDTH}
+              height={VIDEO_HEIGHT}
+              className="cam-canvas"
+            />
+
+            {/* 전체화면 토글 버튼 (우하단) */}
+            <button
+              type="button"
+              className="fullscreen-btn"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? "전체화면 끄기" : "전체화면"}
+              title={isFullscreen ? "전체화면 끄기" : "전체화면"}
+            >
+              {isFullscreen ? "⤡" : "⛶"}
+            </button>
 
           {/* 상태 chip (좌상단) — 운동 중엔 숨김 (그땐 우측 패널 피드백이 안내) */}
           {status && phase !== "exercising" && (
@@ -510,17 +555,25 @@ export default function PoseDetector({
             <div className="hold-countdown-badge">{holdCountdown}</div>
           )}
 
-          {/* 운동 중 핵심 통계 (영상 좌상단) — 모바일에서 패널 안 보여도 횟수 확인 가능 */}
-          {phase === "exercising" && (
+          {/* 운동 중 핵심 통계 (영상 좌상단) — 전체화면일 때만 보이게 */}
+          {phase === "exercising" && isFullscreen && (
             <div className="pose-count-overlay">
-              <div className="pose-count-value">
-                {mode === "hold" ? `${totalHoldSec}` : `${count}`}
+              <div className="pose-count-cell">
+                <div className="pose-count-value">
+                  {mode === "hold" ? totalHoldSec : count}
+                </div>
+                <div className="pose-count-label">
+                  {mode === "hold" ? "초 유지" : "회"}
+                </div>
               </div>
-              <div className="pose-count-label">
-                {mode === "hold" ? "초 유지" : "회"}
+              <div className="pose-count-divider" />
+              <div className="pose-count-cell">
+                <div className="pose-count-value">{formatElapsed(elapsed)}</div>
+                <div className="pose-count-label">시간</div>
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -560,4 +613,12 @@ function InfoBox({ value, label }: { value: string; label: string }) {
       <div className="info-label">{label}</div>
     </div>
   );
+}
+
+// 운동 시간 포맷 — 60초 이상이면 M:SS, 미만은 N초
+function formatElapsed(s: number): string {
+  if (s < 60) return `${s}초`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
 }

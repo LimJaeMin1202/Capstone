@@ -1,4 +1,12 @@
 import { useEffect, useState } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import type { Exercise } from "./types/exercise";
 import type { SessionStats } from "./components/PoseDetector";
 import ExerciseSelect from "./components/ExerciseSelect";
@@ -9,24 +17,17 @@ import AuthPage from "./components/AuthPage";
 import BirthYearModal from "./components/BirthYearModal";
 import SettingsModal from "./components/SettingsModal";
 import { saveRecord } from "./api/records";
+import { fetchExercise } from "./api/exercises";
 import { useAuth } from "./auth/AuthContext";
 import "./App.css";
-
-type View = "select" | "exercise" | "result" | "records";
-
-interface LastResult {
-  exercise: Exercise;
-  stats: SessionStats;
-}
 
 // 어르신 친화 글씨 크기 — 실제 px는 CSS에서 결정 (PC/모바일 다르게 매핑)
 type FontSize = "small" | "normal" | "large";
 
 function App() {
   const { user, loading, logout } = useAuth();
-  const [view, setView] = useState<View>("select");
-  const [selected, setSelected] = useState<Exercise | null>(null);
-  const [lastResult, setLastResult] = useState<LastResult | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
 
   // 글씨 크기 (localStorage에 저장, 로그인 전후 모두 적용)
@@ -35,41 +36,12 @@ function App() {
   );
 
   useEffect(() => {
-    // data-font-size 속성으로 CSS가 화면 폭별로 다른 px 적용
     document.documentElement.setAttribute("data-font-size", fontSize);
     localStorage.setItem("font-size", fontSize);
   }, [fontSize]);
 
-  async function handleComplete(stats: SessionStats) {
-    if (selected) {
-      try {
-        await saveRecord({ exerciseId: selected.id, ...stats });
-      } catch (err) {
-        alert("기록 저장 실패: " + (err as Error).message);
-      }
-      setLastResult({ exercise: selected, stats });
-    }
-    setSelected(null);
-    setView("result");
-  }
-
-  function goSelect() {
-    setSelected(null);
-    setLastResult(null);
-    setView("select");
-  }
-
-  function goRecords() {
-    setSelected(null);
-    setLastResult(null);
-    setView("records");
-  }
-
-  // 로그아웃 시 화면 상태도 홈으로 초기화 (다음 로그인 시 홈에서 시작)
   function handleLogout() {
-    setView("select");
-    setSelected(null);
-    setLastResult(null);
+    navigate("/");
     logout();
   }
 
@@ -90,6 +62,11 @@ function App() {
   // 카카오 가입자가 아직 출생연도 입력 안 했으면 강제 모달
   const needBirthYear = user.birthYear === null;
 
+  // 네비바 active 상태
+  const path = location.pathname;
+  const isRecordsTab = path.startsWith("/records");
+  const isExerciseTab = !isRecordsTab;
+
   return (
     <div className="app">
       {needBirthYear && <BirthYearModal mode="required" />}
@@ -104,25 +81,21 @@ function App() {
           <button
             type="button"
             className="navbar-brand"
-            onClick={goSelect}
+            onClick={() => navigate("/")}
             aria-label="홈으로"
           >
             <img src="/icon.png" alt="CareFit" className="brand-logo" />
           </button>
           <nav className="navbar-nav">
             <button
-              className={
-                view === "select" || view === "exercise" || view === "result"
-                  ? "nav-link active"
-                  : "nav-link"
-              }
-              onClick={goSelect}
+              className={isExerciseTab ? "nav-link active" : "nav-link"}
+              onClick={() => navigate("/")}
             >
               운동하기
             </button>
             <button
-              className={view === "records" ? "nav-link active" : "nav-link"}
-              onClick={goRecords}
+              className={isRecordsTab ? "nav-link active" : "nav-link"}
+              onClick={() => navigate("/records")}
             >
               기록 보기
             </button>
@@ -163,47 +136,104 @@ function App() {
       </header>
 
       <main className="main">
-        {view === "select" && (
-          <>
-            <h1 className="page-title">오늘은 어떤 운동을 해볼까요?</h1>
-            <p className="page-sub">
-              운동을 고르면 카메라가 자세를 보고 실시간으로 알려드려요.
-            </p>
-            <ExerciseSelect
-              onSelect={(ex) => {
-                setSelected(ex);
-                setView("exercise");
-              }}
-            />
-          </>
-        )}
-
-        {view === "exercise" && selected && (
-          <ExerciseScreen
-            exercise={selected}
-            onBack={goSelect}
-            onComplete={handleComplete}
-          />
-        )}
-
-        {view === "result" && lastResult && (
-          <ResultScreen
-            exercise={lastResult.exercise}
-            stats={lastResult.stats}
-            onAnother={goSelect}
-            onRecords={goRecords}
-          />
-        )}
-
-        {view === "records" && (
-          <>
-            <h1 className="page-title">나의 운동 기록</h1>
-            <p className="page-sub">그동안 해온 운동을 한눈에 확인해요.</p>
-            <RecordsScreen />
-          </>
-        )}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/exercise/:id" element={<ExercisePage />} />
+          <Route path="/result" element={<ResultPage />} />
+          <Route path="/records" element={<RecordsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
+  );
+}
+
+// ===== 페이지 컴포넌트 =====
+
+function HomePage() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <h1 className="page-title">오늘은 어떤 운동을 해볼까요?</h1>
+      <p className="page-sub">
+        운동을 고르면 카메라가 자세를 보고 실시간으로 알려드려요.
+      </p>
+      <ExerciseSelect onSelect={(ex) => navigate(`/exercise/${ex.id}`)} />
+    </>
+  );
+}
+
+function ExercisePage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [exercise, setExercise] = useState<Exercise | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    setError(null);
+    setExercise(null);
+    fetchExercise(id)
+      .then(setExercise)
+      .catch((err) => setError(err.message));
+  }, [id]);
+
+  if (error)
+    return (
+      <p className="state-msg error">
+        ❌ {error}
+        <br />
+        운동을 찾을 수 없어요.
+      </p>
+    );
+  if (!exercise) return <p className="state-msg">운동 정보 불러오는 중...</p>;
+
+  return (
+    <ExerciseScreen
+      exercise={exercise}
+      onBack={() => navigate("/")}
+      onComplete={async (stats) => {
+        try {
+          await saveRecord({ exerciseId: exercise.id, ...stats });
+        } catch (err) {
+          alert("기록 저장 실패: " + (err as Error).message);
+        }
+        // 새로고침 시 result는 다시 못 보이게 replace + state로 전달
+        navigate("/result", { state: { exercise, stats }, replace: true });
+      }}
+    />
+  );
+}
+
+function ResultPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const state = location.state as
+    | { exercise: Exercise; stats: SessionStats }
+    | null;
+
+  // 새로고침 등으로 state가 사라지면 홈으로
+  if (!state?.exercise || !state?.stats) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <ResultScreen
+      exercise={state.exercise}
+      stats={state.stats}
+      onAnother={() => navigate("/")}
+      onRecords={() => navigate("/records")}
+    />
+  );
+}
+
+function RecordsPage() {
+  return (
+    <>
+      <h1 className="page-title">나의 운동 기록</h1>
+      <p className="page-sub">그동안 해온 운동을 한눈에 확인해요.</p>
+      <RecordsScreen />
+    </>
   );
 }
 

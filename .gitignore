@@ -26,3 +26,19 @@ Thumbs.db
 
 # 로컬 작업 메타데이터
 .claude/
+.codex/
+
+# 발표 자료 작업용 임시 폴더 (대용량 pptx, 로컬 전용)
+ppt-review-temp/
+
+# 소스 텍스트 덤프 (외부 AI 업로드용, 로컬 전용)
+chatgpt-upload/
+
+# 문서 생성 산출물 — docs/build_carefit_*.{mjs,py} 로 재생성 가능
+docs/carefit-docx-package/
+docs/*.docx
+docs/*.pptx
+docs/*.zip
+
+# 로컬 절대경로 하드코딩 (개인 환경 전용)
+docs/copy_carefit_handoff.mjs

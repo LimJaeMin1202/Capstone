@@ -1,6 +1,10 @@
 // dev: localhost:8080 (백엔드 dev 서버)
-// 배포: VITE_API_BASE를 빈 문자열로 두면 nginx가 같은 도메인에서 /api proxy
-export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8080";
+// 배포: nginx가 같은 도메인에서 /api 를 백엔드로 proxy 하므로 접두사만 필요.
+//   - 루트 배포        VITE_API_BASE="/"        → ""            → /api/...
+//   - 하위 경로 배포    VITE_API_BASE="/carefit/" → "/carefit"   → /carefit/api/...
+// 끝 슬래시를 떼서 apiFetch 의 path("/api/...")와 합칠 때 // 가 생기지 않게 한다.
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8080";
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
 
 const TOKEN_KEY = "capstone-token";
 

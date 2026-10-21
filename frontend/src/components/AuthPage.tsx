@@ -46,7 +46,7 @@ export default function AuthPage() {
     <div className="auth-wrap">
       <div className="auth-card">
         <div className="auth-brand">
-          <img src="/icon.png" alt="CareFit" className="auth-brand-logo" />
+          <img src={`${import.meta.env.BASE_URL}icon.png`} alt="CareFit" className="auth-brand-logo" />
         </div>
 
         <div className="auth-tabs">

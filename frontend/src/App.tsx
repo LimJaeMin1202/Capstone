@@ -84,7 +84,7 @@ function App() {
             onClick={() => navigate("/")}
             aria-label="홈으로"
           >
-            <img src="/icon.png" alt="CareFit" className="brand-logo" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="CareFit" className="brand-logo" />
           </button>
           <nav className="navbar-nav">
             <button

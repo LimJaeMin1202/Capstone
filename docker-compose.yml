@@ -31,6 +31,8 @@ services:
       dockerfile: Dockerfile
     container_name: carefit-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-12003}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/capstone
@@ -51,11 +53,12 @@ services:
       args:
         VITE_KAKAO_REST_API_KEY: ${VITE_KAKAO_REST_API_KEY}
         VITE_KAKAO_REDIRECT_URI: ${VITE_KAKAO_REDIRECT_URI}
-        VITE_API_BASE: ""
+        VITE_BASE_PATH: ${APP_BASE_PATH:-/}
+        VITE_API_BASE: ${APP_BASE_PATH:-/}
     container_name: carefit-frontend
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-80}:80"
+      - "${WEB_PORT:-12002}:80"
     depends_on:
       - backend
 

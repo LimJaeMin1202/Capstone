@@ -149,17 +149,76 @@ export default function PoseDetector({
 
   useEffect(() => {
     let cancelled = false;
+    let cameraStream: MediaStream | null = null;
+
+    const stopCamera = (stream: MediaStream | null) => {
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+
+    async function openCamera(): Promise<MediaStream> {
+      const preferredConstraints: MediaStreamConstraints = {
+        audio: false,
+        video: {
+          width: { ideal: VIDEO_WIDTH },
+          height: { ideal: VIDEO_HEIGHT },
+          facingMode: "user",
+        },
+      };
+
+      try {
+        return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+      } catch (error) {
+        const name = error instanceof DOMException ? error.name : "";
+        if (name !== "NotReadableError" && name !== "AbortError") {
+          throw error;
+        }
+
+        // Some Windows camera drivers fail the first start while releasing a
+        // previous stream. Retry once without resolution constraints.
+        await new Promise((resolve) => window.setTimeout(resolve, 750));
+        if (cancelled) throw error;
+        return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+      }
+    }
+
+    async function waitForVideo(video: HTMLVideoElement): Promise<void> {
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        await new Promise<void>((resolve, reject) => {
+          const handleLoaded = () => {
+            cleanup();
+            resolve();
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("카메라 영상을 불러오지 못했습니다."));
+          };
+          const cleanup = () => {
+            video.removeEventListener("loadeddata", handleLoaded);
+            video.removeEventListener("error", handleError);
+          };
+          video.addEventListener("loadeddata", handleLoaded, { once: true });
+          video.addEventListener("error", handleError, { once: true });
+        });
+      }
+      await video.play();
+    }
 
     async function init() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: VIDEO_WIDTH, height: VIDEO_HEIGHT },
-        });
-        if (cancelled || !videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await new Promise<void>((resolve) => {
-          if (videoRef.current) videoRef.current.onloadeddata = () => resolve();
-        });
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("이 브라우저에서는 카메라를 사용할 수 없습니다.");
+        }
+
+        const stream = await openCamera();
+        if (cancelled || !videoRef.current) {
+          stopCamera(stream);
+          return;
+        }
+        cameraStream = stream;
+        const video = videoRef.current;
+        video.muted = true;
+        video.srcObject = stream;
+        await waitForVideo(video);
 
         setStatus("AI 엔진 준비 중...");
         await tf.setBackend("webgl");
@@ -185,7 +244,18 @@ export default function PoseDetector({
 
         detectLoop();
       } catch (err) {
-        setStatus("❌ 오류: " + (err as Error).message);
+        stopCamera(cameraStream);
+        cameraStream = null;
+        const error = err as Error;
+        const message =
+          error.name === "NotAllowedError"
+            ? "카메라 권한이 거부되었습니다. 주소창의 카메라 권한을 허용해주세요."
+            : error.name === "NotFoundError"
+              ? "사용 가능한 카메라를 찾지 못했습니다."
+              : error.name === "NotReadableError" || error.name === "AbortError"
+                ? "카메라를 시작하지 못했습니다. 다른 카메라 앱과 브라우저 탭을 닫고 다시 시도해주세요."
+                : error.message;
+        if (!cancelled) setStatus("❌ 오류: " + message);
       }
     }
 
@@ -430,8 +500,9 @@ export default function PoseDetector({
         window.clearInterval(countdownIntervalRef.current);
       }
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      const stream = videoRef.current?.srcObject as MediaStream | null;
-      stream?.getTracks().forEach((track) => track.stop());
+      stopCamera(cameraStream);
+      cameraStream = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
       detectorRef.current?.dispose();
       detectorRef.current = null;
     };
@@ -497,7 +568,7 @@ export default function PoseDetector({
       <div className="pose-video-col">
         <div className="video-wrap" ref={videoWrapRef}>
           <div className="video-inner">
-            <video ref={videoRef} autoPlay playsInline className="cam-video" />
+            <video ref={videoRef} autoPlay muted playsInline className="cam-video" />
             <canvas
               ref={canvasRef}
               width={VIDEO_WIDTH}

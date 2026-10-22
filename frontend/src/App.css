@@ -105,6 +105,8 @@
   background: var(--surface-alt);
   border-radius: 12px;
   margin-bottom: 8px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .settings-row-label {
@@ -128,6 +130,8 @@
   cursor: pointer;
   font-size: 0.95rem;
   transition: background 0.15s;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .settings-edit-btn:hover:not(:disabled) {
@@ -148,6 +152,8 @@
   border-radius: 999px;
   cursor: pointer;
   font-size: 0.95rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .settings-cancel-btn:hover:not(:disabled) {
@@ -180,6 +186,9 @@
 
 .settings-row-input {
   flex: 1;
+  min-width: 0;
+  width: auto;
+  box-sizing: border-box;
   font-family: inherit;
   font-size: 1rem;
   padding: 10px 14px;
@@ -187,6 +196,18 @@
   border-radius: 10px;
   background: var(--surface-alt);
   color: var(--text);
+}
+
+/* 이름 편집은 좁은 화면에서 입력칸과 버튼을 별도 줄로 배치한다. */
+@media (max-width: 600px) {
+  .settings-row-editing:not(.settings-row-stack) .settings-row-input {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .settings-row-editing:not(.settings-row-stack) .settings-edit-btn {
+    margin-left: auto;
+  }
 }
 
 .settings-row-input:focus {

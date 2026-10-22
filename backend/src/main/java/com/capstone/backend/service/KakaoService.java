@@ -22,7 +22,7 @@ public class KakaoService {
 
     public KakaoService(
             @Value("${kakao.rest-api-key}") String restApiKey,
-            @Value("${kakao.client-secret}") String clientSecret
+            @Value("${kakao.client-secret:}") String clientSecret
     ) {
         this.restApiKey = restApiKey;
         this.clientSecret = clientSecret;
@@ -34,7 +34,9 @@ public class KakaoService {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "authorization_code");
         body.add("client_id", restApiKey);
-        body.add("client_secret", clientSecret);
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            body.add("client_secret", clientSecret);
+        }
         body.add("redirect_uri", redirectUri);
         body.add("code", code);
 

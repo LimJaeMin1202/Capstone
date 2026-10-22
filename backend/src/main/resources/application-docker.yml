@@ -28,4 +28,8 @@ jwt:
 
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY}
-  client-secret: ${KAKAO_CLIENT_SECRET}
+  client-secret: ${KAKAO_CLIENT_SECRET:}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

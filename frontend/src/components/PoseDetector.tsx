@@ -350,7 +350,7 @@ export default function PoseDetector({
         } else {
           rightEmaRef.current = null;
         }
-        angleStr = [leftStr, rightStr].filter(Boolean).join("   ") || "-";
+        angleStr = [leftStr, rightStr].filter(Boolean).join("\n") || "-";
 
         // 정확도 추적
         const inPose = best.level === "success" || best.level === "perfect";
@@ -694,7 +694,7 @@ export default function PoseDetector({
             </>
           )}
           <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
-          <InfoBox value={angleText} label="📐 현재 각도" />
+          <InfoBox value={angleText} label="📐 현재 각도" className="angle-info-box" />
         </div>
         {phase === "exercising" && (
           <button className="finish-btn" onClick={handleFinish}>
@@ -706,9 +706,9 @@ export default function PoseDetector({
   );
 }
 
-function InfoBox({ value, label }: { value: string; label: string }) {
+function InfoBox({ value, label, className }: { value: string; label: string; className?: string }) {
   return (
-    <div className="info-box">
+    <div className={className ? `info-box ${className}` : "info-box"}>
       <div className="info-value">{value}</div>
       <div className="info-label">{label}</div>
     </div>

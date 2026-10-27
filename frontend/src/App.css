@@ -1500,6 +1500,17 @@
   line-height: 1.1;
 }
 
+.angle-info-box {
+  container-type: inline-size;
+}
+
+.angle-info-box .info-value {
+  width: 100%;
+  font-size: min(2.1rem, 22cqi);
+  line-height: 1.2;
+  white-space: pre;
+}
+
 .info-label {
   font-size: 0.92rem;
   color: var(--text-muted);

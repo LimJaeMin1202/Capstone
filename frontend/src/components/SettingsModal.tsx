@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import BirthYearModal from "./BirthYearModal";
 import { fetchMyGoal, updateMyGoal, type UserGoal } from "../api/goals";
 
@@ -28,12 +28,17 @@ export default function SettingsModal({ onClose, onLogout }: Props) {
   const [goalBusy, setGoalBusy] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
 
+  function loadGoal() {
+    setGoalError(null);
+    fetchMyGoal()
+      .then(setGoal)
+      .catch(() => setGoalError("운동 목표를 불러오지 못했습니다. 재시도해주세요."));
+  }
+
   useEffect(() => {
     fetchMyGoal()
       .then(setGoal)
-      .catch(() => {
-        /* 실패해도 모달 자체는 보여야 함 */
-      });
+      .catch(() => setGoalError("운동 목표를 불러오지 못했습니다. 재시도해주세요."));
   }, []);
 
   const birthYearLabel = user?.birthYear
@@ -257,15 +262,14 @@ export default function SettingsModal({ onClose, onLogout }: Props) {
                 <div className="settings-row-value">
                   {goal
                     ? `${goal.weeklySessionTarget}회 / ${goal.weeklyMinuteTarget}분`
-                    : "불러오는 중..."}
+                    : goalError ? "불러오기 실패" : "불러오는 중..."}
                 </div>
                 <button
                   type="button"
                   className="settings-edit-btn"
-                  onClick={startEditGoal}
-                  disabled={!goal}
+                  onClick={goal ? startEditGoal : loadGoal}
                 >
-                  변경
+                  {goal ? "변경" : "재시도"}
                 </button>
               </div>
             )}

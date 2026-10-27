@@ -43,9 +43,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // 세션 안 씀 (토큰 기반)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(errors -> errors.authenticationEntryPoint(
+                        (request, response, exception) -> response.sendError(401)
+                ))
                 .authorizeHttpRequests(auth -> auth
                         // 공개 경로 (회원가입·로그인·카카오로그인·운동목록 조회)
-                        .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/kakao").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/signup", "/api/auth/login", "/api/auth/kakao").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/exercises/**").permitAll()
                         // 나머지는 로그인 필요
                         .anyRequest().authenticated()

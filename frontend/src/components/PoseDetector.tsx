@@ -150,6 +150,7 @@ export default function PoseDetector({
   useEffect(() => {
     let cancelled = false;
     let cameraStream: MediaStream | null = null;
+    const videoElement = videoRef.current;
 
     const stopCamera = (stream: MediaStream | null) => {
       stream?.getTracks().forEach((track) => track.stop());
@@ -502,7 +503,7 @@ export default function PoseDetector({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       stopCamera(cameraStream);
       cameraStream = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
       detectorRef.current?.dispose();
       detectorRef.current = null;
     };

@@ -17,6 +17,8 @@ services:
       POSTGRES_DB: capstone
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
+      PGTZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -43,9 +45,18 @@ services:
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      TZ: UTC
+      JAVA_TOOL_OPTIONS: -Duser.timezone=UTC
+      DB_BASELINE_ON_MIGRATE: ${DB_BASELINE_ON_MIGRATE:-false}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   frontend:
     build:
@@ -61,7 +72,13 @@ services:
     ports:
       - "${WEB_PORT:-12002}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:

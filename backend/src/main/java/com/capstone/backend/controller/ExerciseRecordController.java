@@ -1,7 +1,9 @@
 package com.capstone.backend.controller;
 
 import com.capstone.backend.entity.ExerciseRecord;
+import com.capstone.backend.dto.ExerciseRecordRequest;
 import com.capstone.backend.service.ExerciseRecordService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -31,7 +33,7 @@ public class ExerciseRecordController {
     @PostMapping
     public ResponseEntity<ExerciseRecord> createRecord(
             Authentication authentication,
-            @RequestBody ExerciseRecord record
+            @Valid @RequestBody ExerciseRecordRequest record
     ) {
         ExerciseRecord created = recordService.createRecord(authentication.getName(), record);
         return ResponseEntity.ok(created);

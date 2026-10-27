@@ -1,0 +1,16 @@
+name: Public health monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public frontend, backend and database
+        env:
+          CAREFIT_ALERT_WEBHOOK_URL: ${{ secrets.CAREFIT_ALERT_WEBHOOK_URL }}
+        run: bash deploy/check-health.sh

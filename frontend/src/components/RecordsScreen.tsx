@@ -26,7 +26,7 @@ interface WeeklyStats {
   weekOffset: number;       // 0=이번주, -1=지난주, ...
   weekSessions: number;
   weekMinutes: number;
-  avgAccuracy: number;      // 전체 평균 (주 무관)
+  avgAccuracy: number;      // 선택한 주의 평균
   streak: number;           // 오늘 기준 연속일 (주 무관)
   daily: DailyBar[];        // 해당 주의 월~일
   feedback: string;
@@ -110,9 +110,9 @@ function computeStats(records: ExerciseRecord[], weekOffset: number): WeeklyStat
     weekRecs.reduce((s, r) => s + r.duration, 0) / 60
   );
   const avgAccuracy =
-    records.length > 0
+    weekRecs.length > 0
       ? Math.round(
-          records.reduce((s, r) => s + r.accuracy, 0) / records.length
+          weekRecs.reduce((s, r) => s + r.accuracy, 0) / weekRecs.length
         )
       : 0;
 
@@ -149,7 +149,7 @@ function computeStats(records: ExerciseRecord[], weekOffset: number): WeeklyStat
   }
 
   // 피드백 메시지 (주 기준)
-  let feedback = "";
+  let feedback: string;
   if (weekOffset === 0) {
     const diff = weekSessions - prevRecs.length;
     if (records.length === 0) {
@@ -232,7 +232,7 @@ export default function RecordsScreen() {
   }, []);
 
   // searchParams 변경마다 stats 다시 계산 (records 그대로 두고)
-  const stats = records.length >= 0 ? computeStats(records, weekOffset) : null;
+  const stats = computeStats(records, weekOffset);
 
   function changeWeek(delta: number) {
     const next = clampOffset(weekOffset + delta);

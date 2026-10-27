@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useRef,
   useState,
@@ -8,35 +6,31 @@ import {
 } from "react";
 import type { AuthUser } from "../api/auth";
 import * as authApi from "../api/auth";
-import { setToken, clearToken, getToken } from "../api/client";
-
-interface AuthContextType {
-  user: AuthUser | null;
-  loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  signup: (
-    username: string,
-    password: string,
-    name: string,
-    birthYear: number
-  ) => Promise<void>;
-  loginWithKakao: () => void;
-  logout: () => void;
-  setBirthYear: (birthYear: number) => Promise<void>;
-  setName: (name: string) => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
+import { setToken, clearToken, getToken, AUTH_EXPIRED_EVENT } from "../api/client";
+import { AuthContext } from "./context";
 
 const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY as string;
 const KAKAO_REDIRECT_URI = import.meta.env.VITE_KAKAO_REDIRECT_URI as string;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => Boolean(new URLSearchParams(window.location.search).get("code") || getToken())
+  );
+  const [sessionMessage, setSessionMessage] = useState<string | null>(null);
 
   // StrictMode에서 useEffect 2회 실행 시 인가코드 재사용 방지
   const handledRef = useRef(false);
+
+  useEffect(() => {
+    const handleExpired = () => {
+      setUser(null);
+      setSessionMessage("로그인이 만료되었습니다. 다시 로그인해주세요.");
+      setLoading(false);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+  }, []);
 
   // 앱 시작 시:
   //  (1) URL에 ?code= 있으면 카카오 콜백 처리 (인가코드 → 백엔드로 보내 JWT 받음)
@@ -59,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(me);
         })
         .catch((err) => {
+          clearToken();
           console.error("카카오 로그인 실패:", err);
           alert("카카오 로그인 실패: " + (err as Error).message);
         })
@@ -72,13 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const token = getToken();
     if (!token) {
-      setLoading(false);
       return;
     }
     authApi
       .getMe()
       .then(setUser)
-      .catch(() => clearToken())
+      .catch(() => {
+        if (getToken()) {
+          setSessionMessage("로그인 상태를 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해주세요.");
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -86,8 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authApi.login(username, password);
     setToken(result.token);
     // 로그인 직후엔 token/username/name만 받으니 me로 birthYear까지 채워옴
-    const me = await authApi.getMe();
-    setUser(me);
+    try {
+      const me = await authApi.getMe();
+      setUser(me);
+      setSessionMessage(null);
+    } catch (error) {
+      clearToken();
+      throw error;
+    }
   }
 
   async function signup(
@@ -123,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     clearToken();
     setUser(null);
+    setSessionMessage(null);
   }
 
   return (
@@ -130,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        sessionMessage,
         login,
         signup,
         loginWithKakao,
@@ -141,10 +147,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextType {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth는 AuthProvider 안에서만 사용");
-  return ctx;
 }

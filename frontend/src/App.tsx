@@ -18,7 +18,7 @@ import BirthYearModal from "./components/BirthYearModal";
 import SettingsModal from "./components/SettingsModal";
 import { saveRecord } from "./api/records";
 import { fetchExercise } from "./api/exercises";
-import { useAuth } from "./auth/AuthContext";
+import { useAuth } from "./auth/useAuth";
 import "./App.css";
 
 // 어르신 친화 글씨 크기 — 실제 px는 CSS에서 결정 (PC/모바일 다르게 매핑)
@@ -165,17 +165,21 @@ function HomePage() {
 
 function ExercisePage() {
   const { id } = useParams<{ id: string }>();
+  if (!id) return <Navigate to="/" replace />;
+  return <ExerciseDetails key={id} id={id} />;
+}
+
+function ExerciseDetails({ id }: { id: string }) {
   const navigate = useNavigate();
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
-    setError(null);
-    setExercise(null);
+    let cancelled = false;
     fetchExercise(id)
-      .then(setExercise)
-      .catch((err) => setError(err.message));
+      .then((loaded) => { if (!cancelled) setExercise(loaded); })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
   }, [id]);
 
   if (error)

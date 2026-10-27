@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import { buildDecadeOptions } from "../utils/birthYearOptions";
 
 // 두 모드 지원:

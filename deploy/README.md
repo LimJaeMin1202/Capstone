@@ -1,5 +1,7 @@
 # CareFit 배포 가이드
 
+현재 연구실 서버의 변경 적용·백업·모니터링 절차는 [OPERATIONS.md](OPERATIONS.md)를 따른다.
+
 Docker Compose를 사용한 단일 호스트 배포 구성. 연구실 서버나 일반 Linux 환경에서 동작.
 
 ## 구성
@@ -8,7 +10,7 @@ Docker Compose를 사용한 단일 호스트 배포 구성. 연구실 서버나 
 ┌────────────────────────────────────────┐
 │  frontend (nginx, port 80)             │
 │  ├─ React 정적 파일                     │
-│  └─ /api/* → backend:8080 프록시        │
+│  └─ /gateway/api/* → backend:8080      │
 ├────────────────────────────────────────┤
 │  backend  (Spring Boot, port 8080)     │
 │  └─ PostgreSQL 연결                     │
@@ -104,19 +106,19 @@ docker compose logs -f frontend    # nginx 로그
 | `docker compose down -v` | 컨테이너+DB 볼륨까지 삭제 (⚠️ 운영 데이터 손실) |
 | `docker compose logs -f` | 전체 로그 실시간 |
 | `docker compose restart backend` | 백엔드만 재시작 |
-| `docker compose pull && docker compose up -d --build` | 최신 코드로 업데이트 (`git pull` 후) |
+| `git pull --ff-only origin main && docker compose --env-file .env up -d --build` | 최신 코드로 수동 배포 |
 
 ## 데이터 백업
 
-PostgreSQL 볼륨(`pgdata`)이 데이터 저장소. 백업:
+PostgreSQL 볼륨(`pgdata`)이 데이터 저장소. 검증 가능한 백업:
 
 ```bash
-docker compose exec postgres pg_dump -U $DB_USERNAME capstone > backup_$(date +%Y%m%d).sql
+bash deploy/backup-db.sh
 ```
 
-복원:
+복원 검증:
 ```bash
-cat backup_20260101.sql | docker compose exec -T postgres psql -U $DB_USERNAME -d capstone
+bash deploy/verify-backup.sh backups/출력된-백업파일.dump
 ```
 
 ## HTTPS 적용 (선택)

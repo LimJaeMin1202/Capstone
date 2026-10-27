@@ -9,6 +9,8 @@ backend/data/records.json
 
 # 환경 변수 (시크릿 포함)
 .env
+.env.backup
+backups/
 .env.local
 !.env.example
 !frontend/.env.example

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import { buildDecadeOptions } from "../utils/birthYearOptions";
 
 export default function AuthPage() {
-  const { login, signup, loginWithKakao } = useAuth();
+  const { login, signup, loginWithKakao, sessionMessage } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -142,7 +142,7 @@ export default function AuthPage() {
             </label>
           )}
 
-          {error && <p className="auth-error">{error}</p>}
+          {(error || sessionMessage) && <p className="auth-error">{error || sessionMessage}</p>}
 
           <button type="submit" className="auth-submit" disabled={busy}>
             {busy ? "처리 중..." : mode === "login" ? "로그인" : "회원가입"}

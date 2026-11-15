@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check public frontend, backend and database
+      - name: Check public frontend and exercise data
         env:
           CAREFIT_ALERT_WEBHOOK_URL: ${{ secrets.CAREFIT_ALERT_WEBHOOK_URL }}
         run: bash deploy/check-health.sh

@@ -20,8 +20,9 @@ report_failure() {
 curl --fail --silent --show-error --max-time 10 \
   -o /dev/null "$base_url/" || report_failure "frontend unavailable"
 
-health="$(curl --fail --silent --show-error --max-time 10 \
-  "$base_url/gateway/api/health")" || report_failure "backend or database unavailable"
-[[ "$health" == *'"status":"UP"'* ]] || report_failure "unexpected backend health response"
+exercise="$(curl --fail --silent --show-error --max-time 10 \
+  "$base_url/gateway/api/exercises/seated-front-raise")" || report_failure "exercise API or database unavailable"
+printf '%s' "$exercise" | grep -Eq '"id"[[:space:]]*:[[:space:]]*"seated-front-raise"' \
+  || report_failure "unexpected exercise API response"
 
-printf '%s\n' "CareFit frontend, backend and database: UP"
+printf '%s\n' "CareFit public frontend and exercise data: UP"

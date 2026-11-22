@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import * as tf from "@tensorflow/tfjs";
-import type { CameraPosition, ExerciseMode } from "../data/exerciseGuides";
+import type { ExerciseGuide } from "../data/exerciseGuides";
 import type { Exercise } from "../types/exercise";
 import { ExerciseSession, type SessionStats } from "../utils/exerciseSession";
-import { analyzePose, isVisibleKeypoint } from "../utils/pose";
+import { analyzePose, CAMERA_FRAME_INSET, getCameraFramingIssue, isVisibleKeypoint } from "../utils/pose";
+import { CameraReadiness } from "../utils/cameraReadiness";
+import CameraSetup from "./CameraSetup";
+import { ExerciseGuideCard, ExerciseGuideDetails, type MotionCue } from "./ExerciseGuide";
 
 const CONNECTIONS: [number, number][] = [
   [0, 1], [0, 2], [1, 3], [2, 4],
@@ -22,9 +25,7 @@ type Phase = "loading" | "ready" | "countdown" | "exercising" | "finished";
 
 interface Props {
   exercise: Exercise;
-  holdSeconds: number;
-  mode: ExerciseMode;
-  cameraPosition: CameraPosition;
+  guide: ExerciseGuide;
   onComplete: (stats: SessionStats, sessionId: string) => Promise<void>;
 }
 
@@ -35,6 +36,11 @@ interface Feedback {
 
 const GUIDE_COLOR = "#2f9e8f";
 const WARNING_COLOR = "#a65b00";
+const FRAME_WAITING = "영상의 테두리 안에 몸이 들어오게 해주세요";
+
+function isSetupPhase(phase: Phase): boolean {
+  return phase === "ready" || phase === "countdown";
+}
 
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof Error ? error.name : "";
@@ -90,12 +96,33 @@ async function waitForVideo(video: HTMLVideoElement, signal: AbortSignal) {
   await video.play();
 }
 
-function drawSkeleton(canvas: HTMLCanvasElement, video: HTMLVideoElement, keypoints: poseDetection.Keypoint[]) {
+function drawSkeleton(
+  canvas: HTMLCanvasElement, video: HTMLVideoElement, keypoints: poseDetection.Keypoint[], framingReady?: boolean,
+) {
   if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
   if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (framingReady !== undefined) {
+    const x = canvas.width * CAMERA_FRAME_INSET;
+    const y = canvas.height * CAMERA_FRAME_INSET;
+    const cornerLength = Math.min(canvas.width, canvas.height) * 0.07;
+    ctx.beginPath();
+    for (const [cx, dx] of [[x, 1], [canvas.width - x, -1]]) {
+      for (const [cy, dy] of [[y, 1], [canvas.height - y, -1]]) {
+        ctx.moveTo(cx, cy + dy * cornerLength);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx + dx * cornerLength, cy);
+      }
+    }
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.64)";
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.strokeStyle = framingReady ? "#75efaf" : "#fff";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
   ctx.save();
   ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
@@ -125,13 +152,20 @@ function smoothAngle(previous: number | null, angle: number | undefined) {
   return previous === null ? angle : previous * 0.7 + angle * 0.3;
 }
 
-export default function PoseDetector({ exercise, holdSeconds, mode, cameraPosition, onComplete }: Props) {
+export default function PoseDetector({ exercise, guide, onComplete }: Props) {
+  const { holdSeconds, mode, cameraPosition } = guide;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoWrapRef = useRef<HTMLDivElement>(null);
+  const workoutRef = useRef<HTMLDivElement>(null);
+  const guideDialogRef = useRef<HTMLDialogElement>(null);
+  const guideOpenRef = useRef(false);
+  const guideVersion = useRef(0);
+  const cameraReadiness = useRef(new CameraReadiness());
+  const autoStartRef = useRef(false);
   const phaseRef = useRef<Phase>("loading");
   const sessionRef = useRef<ExerciseSession | null>(null);
   const countdownTimer = useRef<number | null>(null);
+  const cancelStartButton = useRef<HTMLButtonElement>(null);
   const saveRef = useRef<{ stats: SessionStats; sessionId: string } | null>(null);
   const savingRef = useRef(false);
 
@@ -149,9 +183,12 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [framingIssue, setFramingIssue] = useState<string | null>(FRAME_WAITING);
+  const [autoStart, setAutoStart] = useState(false);
+  const [motionCue, setMotionCue] = useState<MotionCue | null>(null);
 
   useEffect(() => {
-    const handleFullscreen = () => setIsFullscreen(!!document.fullscreenElement);
+    const handleFullscreen = () => setIsFullscreen(document.fullscreenElement === workoutRef.current);
     document.addEventListener("fullscreenchange", handleFullscreen);
     const timer = window.setInterval(() => {
       if (phaseRef.current === "exercising" && sessionRef.current) {
@@ -165,8 +202,12 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
     };
   }, []);
 
+  useEffect(() => {
+    if (phase === "countdown") cancelStartButton.current?.focus({ preventScroll: true });
+  }, [phase]);
+
   async function toggleFullscreen() {
-    const element = videoWrapRef.current;
+    const element = workoutRef.current;
     if (!element) return;
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -175,6 +216,45 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       // Fullscreen API가 없는 브라우저에서는 현재 화면을 유지한다.
     }
   }
+
+  const cancelCountdown = useCallback(() => {
+    if (phaseRef.current !== "countdown") return;
+    if (countdownTimer.current !== null) window.clearInterval(countdownTimer.current);
+    countdownTimer.current = null;
+    phaseRef.current = "ready";
+    setCountdown(null);
+    setPhase("ready");
+  }, []);
+
+  const startCountdown = useCallback(() => {
+    if (phaseRef.current !== "ready" || guideOpenRef.current || document.hidden
+      || !cameraReadiness.current.isReady(performance.now())) return;
+    phaseRef.current = "countdown";
+    setPhase("countdown");
+    let remaining = COUNTDOWN_START;
+    setCountdown(remaining);
+    countdownTimer.current = window.setInterval(() => {
+      const now = performance.now();
+      if (document.hidden || !cameraReadiness.current.isReady(now)) {
+        cameraReadiness.current.reset();
+        setFramingIssue(FRAME_WAITING);
+        cancelCountdown();
+        return;
+      }
+      if (--remaining > 0) {
+        setCountdown(remaining);
+        return;
+      }
+      window.clearInterval(countdownTimer.current!);
+      countdownTimer.current = null;
+      sessionRef.current = new ExerciseSession(mode, holdSeconds, now);
+      setCountdown(null);
+      phaseRef.current = "exercising";
+      setPhase("exercising");
+      setMotionCue("move");
+      setFeedback({ msg: "운동 자세를 만들어 볼까요?", color: GUIDE_COLOR });
+    }, 1000);
+  }, [cancelCountdown, holdSeconds, mode]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -188,7 +268,6 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
     let lastVideoTime = -1;
     let lastFreshFrameTime = performance.now();
     let lastUpdatedAt = 0;
-    let lastMessage = "";
     let leftEma: number | null = null;
     let rightEma: number | null = null;
     let wasMissing = false;
@@ -214,11 +293,9 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
     function cameraFailed(message: string) {
       if (abort.signal.aborted || phaseRef.current === "finished") return;
       stop();
-      if (countdownTimer.current !== null) {
-        window.clearInterval(countdownTimer.current);
-        countdownTimer.current = null;
-        setCountdown(null);
-      }
+      cameraReadiness.current.reset();
+      setFramingIssue(FRAME_WAITING);
+      cancelCountdown();
       if (!sessionRef.current) {
         phaseRef.current = "loading";
         setPhase("loading");
@@ -271,10 +348,9 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       }
       pendingCount = null;
 
-      if (message !== lastMessage) {
-        lastMessage = message;
-        setFeedback({ msg: message, color });
-      }
+      setFeedback((previous) => previous.msg === message && previous.color === color ? previous : { msg: message, color });
+      setMotionCue(missing ? "move" : progress.phase === "satisfied" ? "release"
+        : progress.phase === "holding" && progress.kind === "matched" ? "hold" : "move");
       const angles = [
         leftEma === null ? null : "왼 " + Math.round(leftEma) + "°",
         rightEma === null ? null : "오른 " + Math.round(rightEma) + "°",
@@ -282,6 +358,17 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       setAngleText(angles.filter(Boolean).join("\n") || "-");
       setHoldCountdown(missing ? null : progress.remainingSeconds);
       setTotalHoldSec(progress.totalHoldSeconds);
+    }
+
+    function updateSetup(points: poseDetection.Keypoint[], now: number): boolean {
+      const issue = getCameraFramingIssue(points, exercise, video!.videoWidth, video!.videoHeight);
+      const readiness = cameraReadiness.current;
+      readiness.observe(issue === null, now);
+      const ready = readiness.isReady(performance.now());
+      setFramingIssue(ready ? null : issue ?? "이 위치에서 잠시 기다려 주세요");
+      if (!ready) cancelCountdown();
+      else if (autoStartRef.current) startCountdown();
+      return ready;
     }
 
     async function detectFrame() {
@@ -294,22 +381,32 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       if (document.hidden) {
         lastFreshFrameTime = captureTime;
         sessionRef.current?.interrupt();
+        cameraReadiness.current.reset();
+        setFramingIssue(FRAME_WAITING);
+        cancelCountdown();
       } else if (video!.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video!.currentTime !== lastVideoTime) {
-        const duringExercise = phaseRef.current === "exercising";
+        const capturePhase = phaseRef.current;
+        const captureGuideVersion = guideVersion.current;
         lastVideoTime = video!.currentTime;
         lastFreshFrameTime = captureTime;
-        estimating = true;
-        try {
-          const poses = await detector.estimatePoses(video!);
-          if (abort.signal.aborted) return;
-          const points = poses[0]?.keypoints ?? [];
-          drawSkeleton(canvas!, video!, points);
-          if (duringExercise) updateExercise(points, captureTime);
-        } catch {
-          cameraFailed("자세 인식이 멈췄어요. 카메라를 다시 연결해 주세요.");
-        } finally {
-          estimating = false;
-          if (abort.signal.aborted) disposeModel();
+        if (!guideOpenRef.current) {
+          estimating = true;
+          try {
+            const poses = await detector.estimatePoses(video!);
+            if (abort.signal.aborted) return;
+            if (!document.hidden && !guideOpenRef.current && captureGuideVersion === guideVersion.current) {
+              const points = poses[0]?.keypoints ?? [];
+              const framingReady = isSetupPhase(capturePhase) && isSetupPhase(phaseRef.current)
+                ? updateSetup(points, captureTime) : undefined;
+              drawSkeleton(canvas!, video!, points, framingReady);
+              if (capturePhase === "exercising") updateExercise(points, captureTime);
+            }
+          } catch {
+            cameraFailed("자세 인식이 멈췄어요. 카메라를 다시 연결해 주세요.");
+          } finally {
+            estimating = false;
+            if (abort.signal.aborted) disposeModel();
+          }
         }
       } else if (captureTime - lastFreshFrameTime >= 2000) {
         cameraFailed("카메라 영상이 멈췄어요. 다시 연결해 주세요.");
@@ -348,8 +445,7 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
         } else {
           phaseRef.current = "ready";
           setPhase("ready");
-          setStatus("준비 완료");
-          setFeedback({ msg: "시작 버튼을 누르면 운동이 시작돼요", color: GUIDE_COLOR });
+          setStatus("");
         }
         lastFreshFrameTime = performance.now();
         frame = requestAnimationFrame(detectFrame);
@@ -360,7 +456,7 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
 
     void initialize();
     return stop;
-  }, [cameraAttempt, exercise, mode]);
+  }, [cameraAttempt, cancelCountdown, exercise, mode, startCountdown]);
 
   function retryCamera() {
     setCameraError(null);
@@ -369,28 +465,29 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
     setCameraAttempt((attempt) => attempt + 1);
   }
 
-  function handleStart() {
-    if (phaseRef.current !== "ready" || cameraError) return;
-    phaseRef.current = "countdown";
-    setPhase("countdown");
-    let remaining = COUNTDOWN_START;
-    setCountdown(remaining);
-    const timer = window.setInterval(() => {
-      remaining--;
-      if (remaining > 0) {
-        setCountdown(remaining);
-        return;
-      }
-      window.clearInterval(timer);
-      countdownTimer.current = null;
-      const now = performance.now();
-      sessionRef.current = new ExerciseSession(mode, holdSeconds, now);
-      setCountdown(null);
-      phaseRef.current = "exercising";
-      setPhase("exercising");
-      setFeedback({ msg: "운동 자세를 만들어 볼까요?", color: GUIDE_COLOR });
-    }, 1000);
-    countdownTimer.current = timer;
+  function handleAutoStart(enabled: boolean) {
+    autoStartRef.current = enabled;
+    setAutoStart(enabled);
+  }
+
+  function handleOpenGuide() {
+    const dialog = guideDialogRef.current;
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    guideOpenRef.current = true;
+    guideVersion.current++;
+    cameraReadiness.current.reset();
+    setFramingIssue(FRAME_WAITING);
+    cancelCountdown();
+    sessionRef.current?.interrupt();
+    setHoldCountdown(null);
+  }
+
+  function handleCloseGuide() {
+    guideOpenRef.current = false;
+    if (phaseRef.current === "exercising" && !cameraError) {
+      setFeedback({ msg: "운동을 이어가세요", color: GUIDE_COLOR });
+    }
   }
 
   async function handleFinish() {
@@ -420,115 +517,69 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
   }
 
   return (
-    <div className="pose-area">
+    <div className="pose-area" ref={workoutRef}>
       <div className="pose-video-col">
-        <div className="video-wrap" ref={videoWrapRef}>
-          <div className="video-inner">
-            <video ref={videoRef} autoPlay muted playsInline className="cam-video" />
-            <canvas
-              ref={canvasRef}
-              width={VIDEO_WIDTH}
-              height={VIDEO_HEIGHT}
-              className="cam-canvas"
-            />
-
-            {/* 전체화면 토글 버튼 (우하단) */}
-            <button
-              type="button"
-              className="fullscreen-btn"
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? "전체화면 끄기" : "전체화면"}
-              title={isFullscreen ? "전체화면 끄기" : "전체화면"}
+        <div className="video-wrap">
+          <video ref={videoRef} autoPlay muted playsInline className="cam-video" />
+          <canvas
+            ref={canvasRef}
+            width={VIDEO_WIDTH}
+            height={VIDEO_HEIGHT}
+            className="cam-canvas"
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            className="fullscreen-btn"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? "전체화면 끄기" : "전체화면"}
+            title={isFullscreen ? "전체화면 끄기" : "전체화면"}
+          >
+            <svg
+              width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
             >
-              {isFullscreen ? (
-                // 축소 — 모서리 L자가 안쪽을 향함
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" />
-                </svg>
-              ) : (
-                // 확대 — 모서리 L자가 바깥을 향함
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" />
-                </svg>
-              )}
-            </button>
+              <path d={isFullscreen
+                ? "M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"
+                : "M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"} />
+            </svg>
+          </button>
 
-          {/* 상태 chip (좌상단) — 운동 중엔 숨김 (그땐 우측 패널 피드백이 안내) */}
-          {status && phase !== "exercising" && phase !== "finished" && (
-            <div className="pose-status-chip">{status}</div>
-          )}
-
-          {/* 준비 완료 → 시작 버튼 오버레이 + 카메라 위치 안내 */}
-          {phase === "ready" && !cameraError && (
-            <div className="video-overlay video-overlay-ready">
-              <div className="ready-guide">
-                <div className="ready-guide-title">
-                  카메라를 {cameraPosition === "측면" ? "옆쪽" : cameraPosition} 1.5~2m
-                  거리에 두세요
-                </div>
-                <div className="ready-guide-sub">
-                  {cameraPosition === "측면"
-                    ? "이 운동은 옆모습으로 측정해요. 머리부터 발끝까지 옆모습이 보이게 해주세요."
-                    : cameraPosition === "대각선"
-                      ? "몸 앞쪽 움직임과 양쪽 관절이 보이도록 앞옆으로 카메라를 놓아 주세요."
-                      : "머리부터 발끝까지 앞모습이 전부 보이게 충분히 떨어져 주세요."}
-                </div>
-              </div>
-              <button className="start-btn" onClick={handleStart}>
-                ▶ 운동 시작
-              </button>
-            </div>
-          )}
+          {status && phase === "loading" && <div className="pose-status-chip">{status}</div>}
 
           {cameraError && phase !== "finished" && (
-            <div className="video-overlay video-overlay-ready">
-              <p className="ready-guide-title">{cameraError}</p>
+            <div className="video-overlay video-overlay-stack">
+              <p className="camera-error-message" role="alert">{cameraError}</p>
               <button type="button" className="start-btn" onClick={retryCamera}>카메라 다시 연결</button>
             </div>
           )}
 
-          {/* 카운트다운 오버레이 */}
           {phase === "countdown" && countdown !== null && (
-            <div className="video-overlay">
-              <div key={countdown} className="countdown-num">
-                {countdown}
-              </div>
+            <div className="video-overlay video-overlay-stack">
+              <div key={countdown} className="countdown-num" role="status">{countdown}</div>
+              <button
+                type="button"
+                className="cancel-countdown-btn"
+                ref={cancelStartButton}
+                onClick={() => {
+                  handleAutoStart(false);
+                  cancelCountdown();
+                }}
+              >
+                시작 취소
+              </button>
             </div>
           )}
 
-          {/* 자세 유지 시간 표시 (holding 중일 때만, 우상단) */}
           {phase === "exercising" && holdCountdown !== null && (
             <div className="hold-countdown-badge">{holdCountdown}</div>
           )}
 
-          {/* 운동 중 핵심 통계 (영상 좌상단) — 전체화면일 때만 보이게 */}
           {phase === "exercising" && isFullscreen && (
             <div className="pose-count-overlay">
               <div className="pose-count-cell">
-                <div className="pose-count-value">
-                  {mode === "hold" ? totalHoldSec : count}
-                </div>
-                <div className="pose-count-label">
-                  {mode === "hold" ? "초 유지" : "회"}
-                </div>
+                <div className="pose-count-value">{mode === "hold" ? totalHoldSec : count}</div>
+                <div className="pose-count-label">{mode === "hold" ? "초 유지" : "회"}</div>
               </div>
               <div className="pose-count-divider" />
               <div className="pose-count-cell">
@@ -537,36 +588,66 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
               </div>
             </div>
           )}
-          </div>
         </div>
+
       </div>
 
-      <div className="pose-panel">
-        <div className="feedback-box" role="status" style={{ background: feedback.color }}>
-          {feedback.msg}
-        </div>
-        <div className="info-grid">
-          {mode === "hold" ? (
-            <>
-              <InfoBox value={`${totalHoldSec}초`} label="🔥 누적 유지 시간" />
-              <InfoBox value={`${holdSeconds}초`} label="🎯 목표 유지 시간" />
-            </>
-          ) : (
-            <>
-              <InfoBox value={String(count)} label="✅ 운동 횟수" />
-              <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
-            </>
-          )}
-          <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
-          <InfoBox value={angleText} label="📐 현재 각도" className="angle-info-box" />
-        </div>
-        {saveError && <p className="state-msg error" role="alert">{saveError}</p>}
+      <div className="pose-sidebar">
+        {phase === "ready" && !cameraError && (
+          <CameraSetup
+            position={cameraPosition}
+            issue={framingIssue}
+            autoStart={autoStart}
+            onAutoStart={handleAutoStart}
+            onStart={startCountdown}
+          />
+        )}
+        <ExerciseGuideCard exercise={exercise} guide={guide} cue={motionCue} onOpen={handleOpenGuide} />
         {(phase === "exercising" || phase === "finished") && (
-          <button type="button" className="finish-btn" onClick={handleFinish} disabled={saving}>
-            {saving ? "기록 저장 중..." : saveError ? "기록 저장 다시 시도" : "운동 완료 & 기록 저장"}
-          </button>
+          <div className="pose-panel">
+            {phase === "exercising" && (
+              <div className="feedback-box" role="status" style={{ background: feedback.color }}>
+                {feedback.msg}
+              </div>
+            )}
+            <div className="info-grid">
+              {mode === "hold" ? (
+                <>
+                  <InfoBox value={`${totalHoldSec}초`} label="🔥 누적 유지 시간" />
+                  <InfoBox value={`${holdSeconds}초`} label="🎯 목표 유지 시간" />
+                </>
+              ) : (
+                <>
+                  <InfoBox value={String(count)} label="✅ 운동 횟수" />
+                  <InfoBox value={`${holdSeconds}초`} label="🎯 1회 유지 시간" />
+                </>
+              )}
+              <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
+              <InfoBox value={angleText} label="📐 현재 각도" className="angle-info-box" />
+            </div>
+            {saveError && <p className="state-msg error" role="alert">{saveError}</p>}
+            <button type="button" className="finish-btn" onClick={handleFinish} disabled={saving}>
+              {saving ? "기록 저장 중..." : saveError ? "기록 저장 다시 시도" : "운동 완료 & 기록 저장"}
+            </button>
+          </div>
         )}
       </div>
+
+      <dialog
+        className="motion-guide-dialog"
+        ref={guideDialogRef}
+        onClose={handleCloseGuide}
+        aria-labelledby="motion-guide-dialog-title"
+      >
+        <header className="motion-guide-dialog-header">
+          <h2 id="motion-guide-dialog-title">{exercise.name}</h2>
+          <button type="button" className="motion-guide-btn" onClick={() => guideDialogRef.current?.close()}>
+            {phase === "exercising" ? "운동 계속하기" : "닫기"}
+          </button>
+        </header>
+        {phase === "exercising" && <p className="motion-guide-pause">자세를 확인하는 동안 판정을 잠시 멈췄어요.</p>}
+        <ExerciseGuideDetails exercise={exercise} guide={guide} />
+      </dialog>
     </div>
   );
 }

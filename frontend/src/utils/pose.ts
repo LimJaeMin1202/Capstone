@@ -28,6 +28,7 @@ const JOINT_NAMES: Partial<Record<Exercise["jointA"], Joint>> = {
 };
 
 export const MIN_KEYPOINT_SCORE = 0.3;
+export const CAMERA_FRAME_INSET = 0.04;
 const MIN_SEGMENT_PIXELS = 2;
 // 화면에서 크게 굽은 팔다리를 분리하는 보조 기준이다.
 const EXTENDED_ANGLE = 150;
@@ -341,6 +342,63 @@ function frontLeg(points: Keypoint[]): Side | null {
   const footDx = leftAnkle.x - rightAnkle.x;
   if (Math.abs(nose.x - earX) < MIN_SEGMENT_PIXELS || Math.abs(footDx) < MIN_SEGMENT_PIXELS) return null;
   return footDx * (nose.x - earX) > 0 ? "left" : "right";
+}
+
+const JOINT_LABELS: Record<Joint, string> = {
+  nose: "얼굴",
+  ear: "얼굴",
+  shoulder: "어깨",
+  elbow: "팔꿈치",
+  wrist: "손목",
+  hip: "골반",
+  knee: "무릎",
+  ankle: "발목",
+};
+
+// Check framing at rest using the same joint requirements as the exercise.
+// Angle targets and form checks are evaluated only once the exercise starts.
+export function getCameraFramingIssue(
+  points: Keypoint[], exercise: Exercise, width: number, height: number,
+): string | null {
+  if (!points.some(isVisibleKeypoint)) return "몸이 카메라에 보이게 해주세요";
+  const rule = exerciseRule(exercise);
+  if (!rule || width <= 0 || height <= 0) return "카메라 영상을 확인하고 있어요";
+  const a = JOINT_NAMES[exercise.jointA];
+  const b = JOINT_NAMES[exercise.jointB];
+  const c = JOINT_NAMES[exercise.jointC];
+  if (!a || !b || !c) return "이 운동에 필요한 관절을 확인할 수 없어요";
+
+  function outside(point: Point | undefined): boolean {
+    return !point || point.x < width * CAMERA_FRAME_INSET
+      || point.x > width * (1 - CAMERA_FRAME_INSET)
+      || point.y < height * CAMERA_FRAME_INSET
+      || point.y > height * (1 - CAMERA_FRAME_INSET);
+  }
+
+  const joints = new Set<JointRef>([
+    a, b, c,
+    ...rule.checks.flatMap((form) => form.joints),
+    ...(rule.release?.joints ?? []),
+  ]);
+  const missingOn = (side: Side) => [...joints].filter((joint) => outside(readPoint(points, side, joint)));
+
+  let missing: JointRef[];
+  if (rule.sides === "front") {
+    const side = frontLeg(points);
+    if (!side || outside(readPoint(points, "left", "ankle")) || outside(readPoint(points, "right", "ankle"))
+      || outside(readPoint(points, "left", "nose"))
+      || (outside(readPoint(points, "left", "ear")) && outside(readPoint(points, "right", "ear")))) {
+      return "옆에서 얼굴과 앞발·뒷발이 모두 보이게 해주세요";
+    }
+    missing = missingOn(side);
+  } else {
+    const left = missingOn("left");
+    const right = missingOn("right");
+    missing = rule.sides === "both" ? [...left, ...right] : left.length <= right.length ? left : right;
+  }
+  if (missing.length === 0) return null;
+  const labels = new Set(missing.map((joint) => JOINT_LABELS[joint.replace("other:", "") as Joint]));
+  return `${rule.sides === "both" ? "양쪽 " : ""}${[...labels].slice(0, 2).join("·")}까지 화면 안에 들어오게 해주세요`;
 }
 
 const RANK: Record<Level, number> = { perfect: 2, success: 1, fail: 0 };

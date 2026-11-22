@@ -11,10 +11,14 @@ function importSource(relativePath) {
   return import("data:text/javascript;charset=utf-8," + encodeURIComponent(outputText));
 }
 
-const [{ EXERCISE_GUIDES }, { ExerciseSession }, { analyzePose, calcAngle, getTrackingUnavailableReason, judgeLevel }] =
+const [
+  { EXERCISE_GUIDES }, { ExerciseSession }, { CameraReadiness },
+  { analyzePose, calcAngle, getCameraFramingIssue, getTrackingUnavailableReason, judgeLevel },
+] =
   await Promise.all([
     importSource("../src/data/exerciseGuides.ts"),
     importSource("../src/utils/exerciseSession.ts"),
+    importSource("../src/utils/cameraReadiness.ts"),
     importSource("../src/utils/pose.ts"),
   ]);
 
@@ -68,6 +72,41 @@ const birdLeg = { s: [-50, 0], h: [0, 0], k: [50, 0], a: [94, 0] };
 const birdArm = { s: [-50, 5], h: [0, 5], e: [-83, 5], w: [-116, 5], k: [0, 50] };
 const heelTouch = { s: [-46, -18], h: [0, 0], k: [32, -28], a: [51, 0], w: [35, 5] };
 const flatHeelTouch = { ...heelTouch, s: [-45, 0], w: [-55, 13] };
+
+test("camera framing accepts the rest pose and flags out-of-frame or unreliable required joints", () => {
+  const exercise = exercises.find(({ id }) => id === "seated-front-raise");
+  const points = both({ ...front, ...droppedArms });
+  assert.equal(analyzePose(points, exercise).best?.level, "fail");
+  assert.equal(getCameraFramingIssue(points, exercise, 640, 480), null);
+  points[right.w].x = 639;
+  assert.match(getCameraFramingIssue(points, exercise, 640, 480), /양쪽 손목/);
+  points[right.w] = { x: 300, y: 250, score: 0.29 };
+  assert.match(getCameraFramingIssue(points, exercise, 640, 480), /양쪽 손목/);
+  assert.match(getCameraFramingIssue([], exercise, 640, 480), /몸이 카메라에/);
+});
+
+test("camera framing follows one-side and front-leg requirements", () => {
+  const plank = exercises.find(({ id }) => id === "kneeling-plank");
+  assert.equal(getCameraFramingIssue(pose({ s: [0, 0], h: [35, 20], k: [60, 35] }), plank, 640, 480), null);
+  const lunge = exercises.find(({ id }) => id === "assisted-mini-lunge");
+  assert.match(getCameraFramingIssue(pose(lungeFront), lunge, 640, 480), /앞발·뒷발/);
+  assert.equal(getCameraFramingIssue(pose(lungeFront, lungeRear), lunge, 640, 480), null);
+});
+
+test("camera readiness expires through loss, silence and restart", () => {
+  const framing = new CameraReadiness();
+  for (const time of [0, 200, 400, 650]) framing.observe(true, time);
+  assert.equal(framing.isReady(650), true);
+  assert.equal(framing.isReady(1151), false);
+  framing.observe(true, 1151);
+  assert.equal(framing.isReady(1151), false);
+  for (const time of [1400, 1650, 1801]) framing.observe(true, time);
+  assert.equal(framing.isReady(1801), true);
+  framing.observe(false, 1802);
+  assert.equal(framing.isReady(1802), false);
+  framing.observe(true, 1803);
+  assert.equal(framing.isReady(1803), false);
+});
 
 const cases = {
   "seated-front-raise": [

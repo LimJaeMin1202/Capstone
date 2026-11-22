@@ -66,6 +66,7 @@ function App() {
   const path = location.pathname;
   const isRecordsTab = path.startsWith("/records");
   const isExerciseTab = !isRecordsTab;
+  const isWorkoutPage = path.startsWith("/exercise/");
 
   return (
     <div className="app">
@@ -76,7 +77,7 @@ function App() {
           onLogout={handleLogout}
         />
       )}
-      <header className="navbar">
+      <header className={isWorkoutPage ? "navbar navbar-workout" : "navbar"}>
         <div className="navbar-inner">
           <button
             type="button"

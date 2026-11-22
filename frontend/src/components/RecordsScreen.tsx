@@ -8,8 +8,10 @@ interface Summary {
   exerciseId: string;
   name: string;
   sessions: number;
-  totalGood: number;
-  avgAccuracy: number;
+  totalGood: number | null;
+  totalHoldSeconds: number | null;
+  avgAccuracy: number | null;
+  measuredPercent: number | null;
   lastDate: string;
 }
 
@@ -26,7 +28,7 @@ interface WeeklyStats {
   weekOffset: number;       // 0=이번주, -1=지난주, ...
   weekSessions: number;
   weekMinutes: number;
-  avgAccuracy: number;      // 선택한 주의 평균
+  avgAccuracy: number | null;
   streak: number;           // 오늘 기준 연속일 (주 무관)
   daily: DailyBar[];        // 해당 주의 월~일
   feedback: string;
@@ -79,6 +81,13 @@ function weekLabel(offset: number): string {
 }
 
 // ===== 통계 계산 (weekOffset 기준 주) =====
+function averageAccuracy(records: ExerciseRecord[]): number | null {
+  const measured = records.filter((record) => record.measuredFrames !== 0);
+  return measured.length > 0
+    ? Math.round(measured.reduce((sum, record) => sum + record.accuracy, 0) / measured.length)
+    : null;
+}
+
 function computeStats(records: ExerciseRecord[], weekOffset: number): WeeklyStats {
   const today = startOfDay(new Date());
   const thisMonday = startOfWeek(today);
@@ -109,12 +118,7 @@ function computeStats(records: ExerciseRecord[], weekOffset: number): WeeklyStat
   const weekMinutes = Math.round(
     weekRecs.reduce((s, r) => s + r.duration, 0) / 60
   );
-  const avgAccuracy =
-    weekRecs.length > 0
-      ? Math.round(
-          weekRecs.reduce((s, r) => s + r.accuracy, 0) / weekRecs.length
-        )
-      : 0;
+  const avgAccuracy = averageAccuracy(weekRecs);
 
   // streak는 항상 오늘 기준
   const exerciseDays = new Set(
@@ -210,17 +214,21 @@ export default function RecordsScreen() {
           (grouped[r.exerciseId] ??= []).push(r);
         }
         const result: Summary[] = Object.entries(grouped).map(([id, list]) => {
-          const totalGood = list.reduce((s, r) => s + r.goodCount, 0);
-          const avgAccuracy = Math.round(
-            list.reduce((s, r) => s + r.accuracy, 0) / list.length
-          );
+          const repetitions = list.filter((r) => r.mode !== "hold");
+          const holds = list.filter((r) => r.mode === "hold" && r.totalHoldSeconds != null);
+          const measured = list.filter((r) => r.measuredFrames != null && r.totalFrames != null);
+          const totalFrames = measured.reduce((sum, r) => sum + r.totalFrames!, 0);
           const lastDate = list.map((r) => r.createdAt ?? "").sort().at(-1);
           return {
             exerciseId: id,
             name: nameMap[id] ?? id,
             sessions: list.length,
-            totalGood,
-            avgAccuracy,
+            totalGood: repetitions.length > 0 ? repetitions.reduce((sum, r) => sum + r.goodCount, 0) : null,
+            totalHoldSeconds: holds.length > 0 ? holds.reduce((sum, r) => sum + r.totalHoldSeconds!, 0) : null,
+            avgAccuracy: averageAccuracy(list),
+            measuredPercent: totalFrames > 0
+              ? Math.round(measured.reduce((sum, r) => sum + r.measuredFrames!, 0) * 100 / totalFrames)
+              : null,
             lastDate: lastDate ?? "",
           };
         });
@@ -287,9 +295,9 @@ export default function RecordsScreen() {
             label={`${weekLabel(stats.weekOffset)} 시간`}
           />
           <SummaryCard
-            value={stats.avgAccuracy}
-            unit="%"
-            label="평균 정확도"
+            value={stats.avgAccuracy ?? "—"}
+            unit={stats.avgAccuracy === null ? "" : "%"}
+            label="평균 자세 기준 충족률"
           />
           <SummaryCard
             value={stats.streak}
@@ -331,19 +339,18 @@ export default function RecordsScreen() {
                   <span>
                     실시 <b>{s.sessions}회</b>
                   </span>
+                  {s.totalGood !== null && <span>누적 자세 <b>{s.totalGood}회</b></span>}
+                  {s.totalHoldSeconds !== null && <span>누적 유지 <b>{s.totalHoldSeconds}초</b></span>}
                   <span>
-                    누적 자세 <b>{s.totalGood}회</b>
+                    평균 자세 기준 충족률 <b>{s.avgAccuracy === null ? "—" : s.avgAccuracy + "%"}</b>
                   </span>
-                  <span>
-                    평균 정확도 <b>{s.avgAccuracy}%</b>
-                  </span>
+                  {s.measuredPercent !== null && <span>측정 <b>{s.measuredPercent}%</b></span>}
                 </div>
-                <div className="record-bar">
-                  <div
-                    className="record-bar-fill"
-                    style={{ width: `${s.avgAccuracy}%` }}
-                  />
-                </div>
+                {s.avgAccuracy !== null && (
+                  <div className="record-bar">
+                    <div className="record-bar-fill" style={{ width: s.avgAccuracy + "%" }} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -410,7 +417,7 @@ function SummaryCard({
   label,
   highlight,
 }: {
-  value: number;
+  value: number | string;
   unit: string;
   label: string;
   highlight?: boolean;

@@ -32,8 +32,21 @@ public class ExerciseRecordService {
 
     @Transactional
     public ExerciseRecord createRecord(String username, ExerciseRecordRequest request) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
+        var owner = request.sessionId() == null
+                ? userRepository.findByUsername(username)
+                : userRepository.findByUsernameForUpdate(username);
+        User user = owner.orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
+        if (request.sessionId() != null) {
+            // 같은 사용자의 동시 재시도는 사용자 행 잠금 안에서 기존 기록을 확인한다.
+            var previous = recordRepository.findByUserAndSessionId(user, request.sessionId());
+            if (previous.isPresent()) {
+                ExerciseRecord existing = previous.get();
+                if (!existing.getExerciseId().equals(request.exerciseId())) {
+                    throw new IllegalArgumentException("이미 다른 운동 기록에 사용된 요청입니다");
+                }
+                return existing;
+            }
+        }
         if (!exerciseRepository.existsById(request.exerciseId())) {
             throw new IllegalArgumentException("운동을 찾을 수 없습니다");
         }
@@ -42,6 +55,11 @@ public class ExerciseRecordService {
                 .duration(request.duration())
                 .goodCount(request.goodCount())
                 .accuracy(request.accuracy())
+                .sessionId(request.sessionId())
+                .mode(request.mode())
+                .totalHoldSeconds(request.totalHoldSeconds())
+                .measuredFrames(request.measuredFrames())
+                .totalFrames(request.totalFrames())
                 .user(user)
                 .build();
         return recordRepository.save(record);

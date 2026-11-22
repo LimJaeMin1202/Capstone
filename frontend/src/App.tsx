@@ -8,7 +8,7 @@ import {
   useParams,
 } from "react-router-dom";
 import type { Exercise } from "./types/exercise";
-import type { SessionStats } from "./components/PoseDetector";
+import type { SessionStats } from "./utils/exerciseSession";
 import ExerciseSelect from "./components/ExerciseSelect";
 import ExerciseScreen from "./components/ExerciseScreen";
 import RecordsScreen from "./components/RecordsScreen";
@@ -196,12 +196,8 @@ function ExerciseDetails({ id }: { id: string }) {
     <ExerciseScreen
       exercise={exercise}
       onBack={() => navigate("/")}
-      onComplete={async (stats) => {
-        try {
-          await saveRecord({ exerciseId: exercise.id, ...stats });
-        } catch (err) {
-          alert("기록 저장 실패: " + (err as Error).message);
-        }
+      onComplete={async (stats, sessionId) => {
+        await saveRecord({ exerciseId: exercise.id, sessionId, ...stats });
         // 새로고침 시 result는 다시 못 보이게 replace + state로 전달
         navigate("/result", { state: { exercise, stats }, replace: true });
       }}

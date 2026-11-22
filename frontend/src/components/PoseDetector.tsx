@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 import * as tf from "@tensorflow/tfjs";
+import type { CameraPosition, ExerciseMode } from "../data/exerciseGuides";
 import type { Exercise } from "../types/exercise";
-import { analyzePose } from "../utils/pose";
+import { ExerciseSession, type SessionStats } from "../utils/exerciseSession";
+import { analyzePose, isVisibleKeypoint } from "../utils/pose";
 
-// MoveNet 관절 연결선
 const CONNECTIONS: [number, number][] = [
   [0, 1], [0, 2], [1, 3], [2, 4],
   [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
@@ -14,39 +15,17 @@ const CONNECTIONS: [number, number][] = [
 
 const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
-const MIN_SCORE = 0.3;
+const UI_INTERVAL_MS = 200;
 const COUNTDOWN_START = 3;
 
-// 자세 진입/이탈 시 노이즈 방지용 짧은 그레이스 윈도우
-// 0.3초 동안 자세가 흔들려도 같은 phase 유지 (한두 프레임 노이즈 흡수)
-const PHASE_GRACE_MS = 300;
-// satisfied 상태에서 자세가 "정말로" 풀린 걸 확정하는 데 필요한 시간
-// 이 시간 동안 자세 풀린 상태가 지속되어야 카운트 +1
-// keypoint jitter (한두 프레임 사라짐)로 인한 가짜 카운트 방지
-const RELEASE_CONFIRM_MS = 400;
-
-type Phase = "loading" | "ready" | "countdown" | "exercising";
-
-// 운동 1회 수행 안의 sub-state
-type RepPhase = "rest" | "holding" | "satisfied";
-//  rest      → 휴식 자세 / 운동 자세 미달
-//  holding   → 운동 자세 진입, 목표 시간 채우는 중
-//  satisfied → 목표 시간 채움, 사용자가 풀어주길 기다림 → 풀면 카운트++
-
-export interface SessionStats {
-  mode: "rep" | "hold";        // 운동 모드
-  goodCount: number;           // rep: 횟수 / hold: 자세 잡았다 풀었다 한 사이클 수
-  duration: number;            // 총 운동 시간 (초)
-  accuracy: number;            // 정확한 자세 프레임 비율 (%)
-  totalHoldSeconds: number;    // hold 모드용: 누적으로 자세를 유지한 총 시간 (초)
-}
+type Phase = "loading" | "ready" | "countdown" | "exercising" | "finished";
 
 interface Props {
   exercise: Exercise;
   holdSeconds: number;
-  mode: "rep" | "hold";        // rep: 자세 잡고 풀고 반복 / hold: 한 자세 길게 유지
-  cameraPosition: "정면" | "측면";  // 시작 오버레이 안내용
-  onComplete: (stats: SessionStats) => void;
+  mode: ExerciseMode;
+  cameraPosition: CameraPosition;
+  onComplete: (stats: SessionStats, sessionId: string) => Promise<void>;
 }
 
 interface Feedback {
@@ -54,514 +33,369 @@ interface Feedback {
   color: string;
 }
 
-export default function PoseDetector({
-  exercise,
-  holdSeconds,
-  mode,
-  cameraPosition,
-  onComplete,
-}: Props) {
+const GUIDE_COLOR = "#2f9e8f";
+const WARNING_COLOR = "#a65b00";
+
+function cameraErrorMessage(error: unknown): string {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "NotAllowedError") return "주소창에서 카메라 권한을 허용해 주세요.";
+  if (name === "NotFoundError") return "카메라가 연결되어 있는지 확인해 주세요.";
+  if (name === "NotReadableError" || name === "AbortError") {
+    return "카메라를 사용하는 다른 앱이나 탭을 닫고 다시 시도해 주세요.";
+  }
+  return error instanceof Error ? error.message : "카메라를 다시 연결해 주세요.";
+}
+
+async function openCamera(signal: AbortSignal): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("이 브라우저에서는 카메라를 사용할 수 없어요.");
+  }
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { width: { ideal: VIDEO_WIDTH }, height: { ideal: VIDEO_HEIGHT }, facingMode: "user" },
+    });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name !== "NotReadableError" && name !== "AbortError") throw error;
+    // 카메라 드라이버가 직전 스트림을 놓을 시간을 준다.
+    await new Promise((resolve) => window.setTimeout(resolve, 750));
+    signal.throwIfAborted();
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  }
+}
+
+async function waitForVideo(video: HTMLVideoElement, signal: AbortSignal) {
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    await new Promise<void>((resolve, reject) => {
+      function settle(error?: unknown) {
+        window.clearTimeout(timeout);
+        video.removeEventListener("loadeddata", handleLoaded);
+        video.removeEventListener("error", handleError);
+        signal.removeEventListener("abort", handleAbort);
+        if (error) reject(error);
+        else resolve();
+      }
+      const handleLoaded = () => settle();
+      const handleError = () => settle(new Error("카메라 영상을 불러오지 못했어요."));
+      const handleAbort = () => settle(signal.reason);
+      const timeout = window.setTimeout(handleError, 10000);
+      video.addEventListener("loadeddata", handleLoaded, { once: true });
+      video.addEventListener("error", handleError, { once: true });
+      signal.addEventListener("abort", handleAbort, { once: true });
+      if (signal.aborted) handleAbort();
+    });
+  }
+  signal.throwIfAborted();
+  await video.play();
+}
+
+function drawSkeleton(canvas: HTMLCanvasElement, video: HTMLVideoElement, keypoints: poseDetection.Keypoint[]) {
+  if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+  if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#00e5ff";
+  for (const [i, j] of CONNECTIONS) {
+    const a = keypoints[i];
+    const b = keypoints[j];
+    if (!isVisibleKeypoint(a) || !isVisibleKeypoint(b)) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#ff4081";
+  for (const point of keypoints) {
+    if (!isVisibleKeypoint(point)) continue;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+export default function PoseDetector({ exercise, holdSeconds, mode, cameraPosition, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoWrapRef = useRef<HTMLDivElement>(null);
-  const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
-  const rafRef = useRef<number | null>(null);
-
-  // ===== Rep state machine =====
-  const repPhaseRef = useRef<RepPhase>("rest");
-  const holdStartRef = useRef<number | null>(null); // holding phase 진입 시각
-  const lastInPoseRef = useRef<number>(0);          // 마지막으로 자세가 OK였던 시각
-  const releaseStartRef = useRef<number | null>(null); // satisfied에서 자세 풀기 시작한 시각
-
-  // ===== 통계 =====
-  const startTimeRef = useRef<number>(0);
-  const countRef = useRef<number>(0);
-  const totalFramesRef = useRef<number>(0);
-  const goodFramesRef = useRef<number>(0);
-
-  // hold 모드: 자세를 잡고 있는 동안 매 프레임 누적되는 시간 (ms)
-  const holdAccumMsRef = useRef<number>(0);
-  const lastTickRef = useRef<number>(0);
-
-  const modeRef = useRef(mode);
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
-
-  // ===== UI 안정화 =====
-  const leftEmaRef = useRef<number | null>(null);
-  const rightEmaRef = useRef<number | null>(null);
-  const lastUiRef = useRef<number>(0);
-  const lastMsgRef = useRef<string>("");
-
-  // ===== Phase 관리 =====
-  const [phase, setPhase] = useState<Phase>("loading");
   const phaseRef = useRef<Phase>("loading");
+  const sessionRef = useRef<ExerciseSession | null>(null);
+  const countdownTimer = useRef<number | null>(null);
+  const saveRef = useRef<{ stats: SessionStats; sessionId: string } | null>(null);
+  const savingRef = useRef(false);
+
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [status, setStatus] = useState("카메라 연결 중...");
+  const [feedback, setFeedback] = useState<Feedback>({ msg: "카메라와 모델을 준비하고 있어요", color: GUIDE_COLOR });
   const [countdown, setCountdown] = useState<number | null>(null);
-  const countdownIntervalRef = useRef<number | null>(null);
-
-  const holdSecondsRef = useRef(holdSeconds);
-  useEffect(() => {
-    holdSecondsRef.current = holdSeconds;
-  }, [holdSeconds]);
-
-  const [status, setStatus] = useState("모델 로딩 중...");
-  const [feedback, setFeedback] = useState<Feedback>({
-    msg: "AI가 준비되면 시작 버튼이 나타나요",
-    color: "#2f9e8f",
-  });
+  const [holdCountdown, setHoldCountdown] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [angleText, setAngleText] = useState("-");
-  // 카운트다운 표시 (holding 중 남은 시간을 작게 보여줌)
-  const [holdCountdown, setHoldCountdown] = useState<number | null>(null);
-  // hold 모드용: 누적 유지 시간 (초)
   const [totalHoldSec, setTotalHoldSec] = useState(0);
-  // 전체화면 상태 (Fullscreen API)
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraAttempt, setCameraAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // 브라우저의 fullscreenchange 이벤트를 듣고 상태 동기화 (ESC도 자동 처리됨)
   useEffect(() => {
-    function handler() {
-      setIsFullscreen(!!document.fullscreenElement);
-    }
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
+    const handleFullscreen = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handleFullscreen);
+    const timer = window.setInterval(() => {
+      if (phaseRef.current === "exercising" && sessionRef.current) {
+        setElapsed(sessionRef.current.stats(performance.now()).duration);
+      }
+    }, 1000);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreen);
+      window.clearInterval(timer);
+      if (countdownTimer.current !== null) window.clearInterval(countdownTimer.current);
+    };
   }, []);
 
   async function toggleFullscreen() {
-    const el = videoWrapRef.current;
-    if (!el) return;
+    const element = videoWrapRef.current;
+    if (!element) return;
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await el.requestFullscreen();
-      }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await element.requestFullscreen();
     } catch {
-      // iOS Safari 등에서 div 전체화면 미지원
+      // Fullscreen API가 없는 브라우저에서는 현재 화면을 유지한다.
     }
   }
 
   useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const abort = new AbortController();
+    let stream: MediaStream | null = null;
+    let detector: poseDetection.PoseDetector | null = null;
+    let frame: number | null = null;
+    let estimating = false;
+    let lastVideoTime = -1;
+    let lastFreshFrameTime = performance.now();
+    let lastUpdatedAt = 0;
+    let lastMessage = "";
 
-  useEffect(() => {
-    let cancelled = false;
-    let cameraStream: MediaStream | null = null;
-    const videoElement = videoRef.current;
-
-    const stopCamera = (stream: MediaStream | null) => {
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-
-    async function openCamera(): Promise<MediaStream> {
-      const preferredConstraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          width: { ideal: VIDEO_WIDTH },
-          height: { ideal: VIDEO_HEIGHT },
-          facingMode: "user",
-        },
-      };
-
-      try {
-        return await navigator.mediaDevices.getUserMedia(preferredConstraints);
-      } catch (error) {
-        const name = error instanceof DOMException ? error.name : "";
-        if (name !== "NotReadableError" && name !== "AbortError") {
-          throw error;
-        }
-
-        // Some Windows camera drivers fail the first start while releasing a
-        // previous stream. Retry once without resolution constraints.
-        await new Promise((resolve) => window.setTimeout(resolve, 750));
-        if (cancelled) throw error;
-        return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
-      }
+    function disposeModel() {
+      detector?.dispose();
+      detector = null;
     }
 
-    async function waitForVideo(video: HTMLVideoElement): Promise<void> {
-      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        await new Promise<void>((resolve, reject) => {
-          const handleLoaded = () => {
-            cleanup();
-            resolve();
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("카메라 영상을 불러오지 못했습니다."));
-          };
-          const cleanup = () => {
-            video.removeEventListener("loadeddata", handleLoaded);
-            video.removeEventListener("error", handleError);
-          };
-          video.addEventListener("loadeddata", handleLoaded, { once: true });
-          video.addEventListener("error", handleError, { once: true });
-        });
+    function stop() {
+      if (abort.signal.aborted) return;
+      abort.abort();
+      if (frame !== null) cancelAnimationFrame(frame);
+      for (const track of stream?.getTracks() ?? []) {
+        track.removeEventListener("ended", trackEnded);
+        track.stop();
       }
-      await video.play();
+      if (video!.srcObject === stream) video!.srcObject = null;
+      if (!estimating) disposeModel();
     }
 
-    async function init() {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("이 브라우저에서는 카메라를 사용할 수 없습니다.");
-        }
-
-        const stream = await openCamera();
-        if (cancelled || !videoRef.current) {
-          stopCamera(stream);
-          return;
-        }
-        cameraStream = stream;
-        const video = videoRef.current;
-        video.muted = true;
-        video.srcObject = stream;
-        await waitForVideo(video);
-
-        setStatus("AI 엔진 준비 중...");
-        await tf.setBackend("webgl");
-        await tf.ready();
-
-        setStatus("AI 모델 로딩 중... (처음엔 10초 정도 걸려요)");
-        const detector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.MoveNet,
-          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-        );
-        if (cancelled) {
-          detector.dispose();
-          return;
-        }
-        detectorRef.current = detector;
-
-        setPhase("ready");
-        setStatus("✅ 준비 완료! 시작 버튼을 눌러주세요");
-        setFeedback({
-          msg: "시작 버튼을 누르면 운동이 시작돼요",
-          color: "#2f9e8f",
-        });
-
-        detectLoop();
-      } catch (err) {
-        stopCamera(cameraStream);
-        cameraStream = null;
-        const error = err as Error;
-        const message =
-          error.name === "NotAllowedError"
-            ? "카메라 권한이 거부되었습니다. 주소창의 카메라 권한을 허용해주세요."
-            : error.name === "NotFoundError"
-              ? "사용 가능한 카메라를 찾지 못했습니다."
-              : error.name === "NotReadableError" || error.name === "AbortError"
-                ? "카메라를 시작하지 못했습니다. 다른 카메라 앱과 브라우저 탭을 닫고 다시 시도해주세요."
-                : error.message;
-        if (!cancelled) setStatus("❌ 오류: " + message);
-      }
-    }
-
-    async function detectLoop() {
-      const detector = detectorRef.current;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!detector || !video || !canvas) return;
-
-      const poses = await detector.estimatePoses(video);
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-        if (poses.length > 0) {
-          const kp = poses[0].keypoints;
-          drawSkeleton(ctx, kp);
-          if (phaseRef.current === "exercising") {
-            judge(kp);
-          }
-        }
-      }
-      rafRef.current = requestAnimationFrame(detectLoop);
-    }
-
-    const UI_INTERVAL_MS = 200;
-
-    const smooth = (prev: number | null, cur: number) =>
-      prev === null ? cur : prev * 0.7 + cur * 0.3;
-
-    function judge(keypoints: poseDetection.Keypoint[]) {
-      const now = Date.now();
-      const { left, right, best } = analyzePose(keypoints, exercise);
-
-      let msg: string;
-      let color: string;
-      let angleStr: string;
-      let countdownDisplay: number | null = null;
-
-      // satisfied 상태에서 자세가 "정말" 풀렸는지 시간으로 확정하는 헬퍼
-      // released 가 RELEASE_CONFIRM_MS 만큼 지속되어야 카운트 +1
-      function tryConfirmRelease(): { msg: string; color: string } {
-        if (releaseStartRef.current === null) {
-          releaseStartRef.current = now;
-        }
-        if (now - releaseStartRef.current >= RELEASE_CONFIRM_MS) {
-          countRef.current += 1;
-          setCount(countRef.current);
-          repPhaseRef.current = "rest";
-          holdStartRef.current = null;
-          releaseStartRef.current = null;
-          return {
-            msg: `🎉 ${countRef.current}회 완료! 다음 자세 준비`,
-            color: "#1e9e54",
-          };
-        }
-        return { msg: "잘 했어요. 천천히 풀어주세요", color: "#3aa564" };
-      }
-
-      if (!best) {
-        angleStr = "-";
-        leftEmaRef.current = null;
-        rightEmaRef.current = null;
-
-        if (repPhaseRef.current === "satisfied") {
-          // 키포인트 사라짐 = 사용자가 자세 풀면서 가려진 것일 가능성 높음
-          // 단, jitter(한두 프레임)로 인한 가짜 카운트 방지 위해 시간 확정
-          const r = tryConfirmRelease();
-          msg = r.msg;
-          color = r.color;
-        } else if (repPhaseRef.current === "holding") {
-          // holding 중 키포인트 일시적 손실: phase 유지
-          msg = "조금만 더 또렷하게 보여주세요";
-          color = "#e08600";
-        } else {
-          msg = "카메라에 몸 전체가 보이게 해주세요";
-          color = "#e08600";
-        }
-      } else {
-        // 각도 EMA 스무딩 + 좌/우 텍스트
-        let leftStr = "";
-        let rightStr = "";
-        if (left) {
-          leftEmaRef.current = smooth(leftEmaRef.current, left.angle);
-          leftStr = `왼 ${Math.round(leftEmaRef.current)}°`;
-        } else {
-          leftEmaRef.current = null;
-        }
-        if (right) {
-          rightEmaRef.current = smooth(rightEmaRef.current, right.angle);
-          rightStr = `오른 ${Math.round(rightEmaRef.current)}°`;
-        } else {
-          rightEmaRef.current = null;
-        }
-        angleStr = [leftStr, rightStr].filter(Boolean).join("\n") || "-";
-
-        // 정확도 추적
-        const inPose = best.level === "success" || best.level === "perfect";
-        totalFramesRef.current += 1;
-        if (inPose) goodFramesRef.current += 1;
-
-        // hold 모드: 자세 잡고 있는 동안 매 프레임 시간 누적
-        // 잠시 끊겨도 (recentlyInPose) 누적 유지하고, 진짜 풀리면 lastTick 리셋
-        if (inPose) {
-          if (lastTickRef.current > 0) {
-            holdAccumMsRef.current += now - lastTickRef.current;
-          }
-          lastTickRef.current = now;
-        } else if (!(now - lastInPoseRef.current < PHASE_GRACE_MS)) {
-          lastTickRef.current = 0;
-        }
-
-        // 그레이스 윈도우: 자세 한두 프레임 흔들려도 같은 phase 유지
-        if (inPose) lastInPoseRef.current = now;
-        const recentlyInPose = now - lastInPoseRef.current < PHASE_GRACE_MS;
-
-        const holdMs = holdSecondsRef.current * 1000;
-
-        // ===== State machine =====
-        switch (repPhaseRef.current) {
-          case "rest": {
-            releaseStartRef.current = null;
-            if (inPose) {
-              repPhaseRef.current = "holding";
-              holdStartRef.current = now;
-              msg = `🟢 자세 잡았어요! ${holdSecondsRef.current}초 유지하세요`;
-              color = "#3aa564";
-            } else {
-              msg = "운동 자세를 천천히 만들어 보세요";
-              color = "#e08600";
-            }
-            break;
-          }
-
-          case "holding": {
-            releaseStartRef.current = null;
-            if (inPose || recentlyInPose) {
-              const held = now - (holdStartRef.current ?? now);
-              // 카운트다운 흐름: N → ... → 1 → 0 → satisfied
-              // 0을 잠깐 보여주기 위해 satisfied 진입을 400ms 늦춤
-              const ZERO_HOLD_MS = 400;
-              if (held >= holdMs + ZERO_HOLD_MS) {
-                repPhaseRef.current = "satisfied";
-                msg = "✨ 충분해요! 천천히 내려놓으세요";
-                color = "#1e9e54";
-              } else if (held >= holdMs) {
-                countdownDisplay = 0;
-                msg = "✨ 거의 다 됐어요!";
-                color = "#1e9e54";
-              } else {
-                const remaining = Math.max(1, Math.ceil((holdMs - held) / 1000));
-                countdownDisplay = remaining;
-                msg = `⏳ 자세 유지 중... ${remaining}초 남았어요`;
-                color = "#2f9e8f";
-              }
-            } else {
-              repPhaseRef.current = "rest";
-              holdStartRef.current = null;
-              msg = "조금만 더 유지해보세요";
-              color = "#d8453b";
-            }
-            break;
-          }
-
-          case "satisfied": {
-            const released = !inPose && !recentlyInPose;
-            if (released) {
-              const r = tryConfirmRelease();
-              msg = r.msg;
-              color = r.color;
-            } else {
-              // 다시 자세 잡힘 (또는 그레이스 윈도우 내) → release 취소
-              releaseStartRef.current = null;
-              msg = "잘 했어요. 천천히 풀어주세요";
-              color = "#3aa564";
-            }
-            break;
-          }
-        }
-
-        if (repPhaseRef.current !== "holding") {
-          countdownDisplay = null;
-        }
-      }
-
-      // UI 업데이트는 일정 간격으로
-      if (now - lastUiRef.current >= UI_INTERVAL_MS) {
-        lastUiRef.current = now;
-        setAngleText(angleStr);
-        setHoldCountdown(countdownDisplay);
-        if (modeRef.current === "hold") {
-          setTotalHoldSec(Math.floor(holdAccumMsRef.current / 1000));
-        }
-        if (msg !== lastMsgRef.current) {
-          lastMsgRef.current = msg;
-          setFeedback({ msg, color });
-        }
-      }
-    }
-
-    function drawSkeleton(
-      ctx: CanvasRenderingContext2D,
-      keypoints: poseDetection.Keypoint[]
-    ) {
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.translate(-VIDEO_WIDTH, 0);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#00e5ff";
-      for (const [i, j] of CONNECTIONS) {
-        const a = keypoints[i];
-        const b = keypoints[j];
-        if ((a.score ?? 0) > MIN_SCORE && (b.score ?? 0) > MIN_SCORE) {
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-        }
-      }
-      ctx.fillStyle = "#ff4081";
-      for (const kp of keypoints) {
-        if ((kp.score ?? 0) > MIN_SCORE) {
-          ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-    }
-
-    init();
-
-    const timer = setInterval(() => {
-      if (startTimeRef.current) {
-        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }
-    }, 1000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      if (countdownIntervalRef.current) {
-        window.clearInterval(countdownIntervalRef.current);
-      }
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      stopCamera(cameraStream);
-      cameraStream = null;
-      if (videoElement) videoElement.srcObject = null;
-      detectorRef.current?.dispose();
-      detectorRef.current = null;
-    };
-  }, [exercise]);
-
-  // 시작 버튼 → 3-2-1 카운트다운 → 운동 시작
-  function handleStart() {
-    setPhase("countdown");
-    let n = COUNTDOWN_START;
-    setCountdown(n);
-
-    const id = window.setInterval(() => {
-      n -= 1;
-      if (n <= 0) {
-        window.clearInterval(id);
-        countdownIntervalRef.current = null;
-
-        startTimeRef.current = Date.now();
-        countRef.current = 0;
-        setCount(0);
-        goodFramesRef.current = 0;
-        totalFramesRef.current = 0;
-        // Rep state machine 초기화
-        repPhaseRef.current = "rest";
-        holdStartRef.current = null;
-        releaseStartRef.current = null;
-        lastInPoseRef.current = 0;
-        lastMsgRef.current = "";
-        // hold 모드 누적 시간 초기화
-        holdAccumMsRef.current = 0;
-        lastTickRef.current = 0;
-        setTotalHoldSec(0);
-
+    function cameraFailed(message: string) {
+      if (abort.signal.aborted || phaseRef.current === "finished") return;
+      stop();
+      if (countdownTimer.current !== null) {
+        window.clearInterval(countdownTimer.current);
+        countdownTimer.current = null;
         setCountdown(null);
-        setPhase("exercising");
-        setStatus("운동 중");
-        setFeedback({ msg: "자, 운동 자세를 만들어 볼까요!", color: "#3aa564" });
-      } else {
-        setCountdown(n);
       }
-    }, 1000);
-    countdownIntervalRef.current = id;
+      if (!sessionRef.current) {
+        phaseRef.current = "loading";
+        setPhase("loading");
+      }
+      sessionRef.current?.interrupt();
+      setCameraError(message);
+      setStatus("");
+      setFeedback({ msg: message, color: WARNING_COLOR });
+      setHoldCountdown(null);
+      setAngleText("-");
+    }
+
+    function trackEnded() {
+      cameraFailed("카메라 연결이 끊겼어요. 다시 연결해 주세요.");
+    }
+
+    function updateExercise(points: poseDetection.Keypoint[], now: number) {
+      const session = sessionRef.current;
+      if (phaseRef.current !== "exercising" || !session) return;
+      const pose = analyzePose(points, exercise, session.activeSide);
+      const progress = session.observe(pose, now);
+      let message = pose.hint ?? "운동 자세를 천천히 만들어 보세요";
+      let color = GUIDE_COLOR;
+
+      if (progress.kind === "missing") {
+        message = pose.hint ?? "필요한 관절이 화면에 보이게 해주세요";
+        color = WARNING_COLOR;
+      } else if (progress.counted) {
+        message = "🎉 " + progress.count + "회 완료! 다음 자세 준비";
+        color = "#1e9e54";
+      } else if (progress.phase === "satisfied") {
+        message = mode === "hold" ? "목표 시간에 도달했어요" : "충분해요! 천천히 자세를 풀어 주세요";
+        color = "#1e9e54";
+      } else if (progress.kind === "matched") {
+        message = progress.started ? "자세 잡았어요! 유지해 주세요" : "자세 유지 중이에요";
+      } else {
+        color = WARNING_COLOR;
+      }
+
+      if (message !== lastMessage) {
+        lastMessage = message;
+        setFeedback({ msg: message, color });
+      }
+      if (progress.completed || progress.counted || progress.kind === "missing" || now - lastUpdatedAt >= UI_INTERVAL_MS) {
+        lastUpdatedAt = now;
+        const angles = [pose.left && "왼 " + pose.left.angle + "°", pose.right && "오른 " + pose.right.angle + "°"];
+        setAngleText(angles.filter(Boolean).join("\n") || "-");
+        setHoldCountdown(progress.kind === "missing" ? null : progress.remainingSeconds);
+        setCount(progress.count);
+        setTotalHoldSec(progress.totalHoldSeconds);
+      }
+    }
+
+    async function detectFrame() {
+      if (abort.signal.aborted || !detector) return;
+      if (phaseRef.current === "finished") {
+        stop();
+        return;
+      }
+      const captureTime = performance.now();
+      if (document.hidden) {
+        lastFreshFrameTime = captureTime;
+        sessionRef.current?.interrupt();
+      } else if (video!.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video!.currentTime !== lastVideoTime) {
+        const duringExercise = phaseRef.current === "exercising";
+        lastVideoTime = video!.currentTime;
+        lastFreshFrameTime = captureTime;
+        estimating = true;
+        try {
+          const poses = await detector.estimatePoses(video!);
+          if (abort.signal.aborted) return;
+          const points = poses[0]?.keypoints ?? [];
+          drawSkeleton(canvas!, video!, points);
+          if (duringExercise) updateExercise(points, captureTime);
+        } catch {
+          cameraFailed("자세 인식이 멈췄어요. 카메라를 다시 연결해 주세요.");
+        } finally {
+          estimating = false;
+          if (abort.signal.aborted) disposeModel();
+        }
+      } else if (captureTime - lastFreshFrameTime >= 2000) {
+        cameraFailed("카메라 영상이 멈췄어요. 다시 연결해 주세요.");
+      }
+      if (!abort.signal.aborted) frame = requestAnimationFrame(detectFrame);
+    }
+
+    async function initialize() {
+      try {
+        const opened = await openCamera(abort.signal);
+        if (abort.signal.aborted) {
+          opened.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = opened;
+        opened.getVideoTracks().forEach((track) => track.addEventListener("ended", trackEnded));
+        video!.srcObject = opened;
+        await waitForVideo(video!, abort.signal);
+        abort.signal.throwIfAborted();
+        setStatus("자세 인식 모델 준비 중...");
+        if (!await tf.setBackend("webgl")) throw new Error("자세 인식에 필요한 그래픽 기능을 사용할 수 없어요.");
+        await tf.ready();
+        abort.signal.throwIfAborted();
+        const model = await poseDetection.createDetector(
+          poseDetection.SupportedModels.MoveNet,
+          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING },
+        );
+        if (abort.signal.aborted || phaseRef.current === "finished") {
+          model.dispose();
+          stop();
+          return;
+        }
+        detector = model;
+        if (phaseRef.current === "exercising") {
+          setFeedback({ msg: "카메라가 연결됐어요. 운동을 이어가세요", color: GUIDE_COLOR });
+        } else {
+          phaseRef.current = "ready";
+          setPhase("ready");
+          setStatus("준비 완료");
+          setFeedback({ msg: "시작 버튼을 누르면 운동이 시작돼요", color: GUIDE_COLOR });
+        }
+        lastFreshFrameTime = performance.now();
+        frame = requestAnimationFrame(detectFrame);
+      } catch (error) {
+        cameraFailed(cameraErrorMessage(error));
+      }
+    }
+
+    void initialize();
+    return stop;
+  }, [cameraAttempt, exercise, mode]);
+
+  function retryCamera() {
+    setCameraError(null);
+    setStatus("카메라 연결 중...");
+    setFeedback({ msg: "카메라를 다시 연결하고 있어요", color: GUIDE_COLOR });
+    setCameraAttempt((attempt) => attempt + 1);
   }
 
-  function handleFinish() {
-    const duration = startTimeRef.current
-      ? Math.floor((Date.now() - startTimeRef.current) / 1000)
-      : 0;
-    const total = totalFramesRef.current;
-    const accuracy =
-      total > 0 ? Math.round((goodFramesRef.current / total) * 100) : 0;
-    onComplete({
-      mode,
-      goodCount: countRef.current,
-      duration,
-      accuracy,
-      totalHoldSeconds: Math.floor(holdAccumMsRef.current / 1000),
-    });
+  function handleStart() {
+    if (phaseRef.current !== "ready" || cameraError) return;
+    phaseRef.current = "countdown";
+    setPhase("countdown");
+    let remaining = COUNTDOWN_START;
+    setCountdown(remaining);
+    const timer = window.setInterval(() => {
+      remaining--;
+      if (remaining > 0) {
+        setCountdown(remaining);
+        return;
+      }
+      window.clearInterval(timer);
+      countdownTimer.current = null;
+      const now = performance.now();
+      sessionRef.current = new ExerciseSession(mode, holdSeconds, now);
+      setCountdown(null);
+      phaseRef.current = "exercising";
+      setPhase("exercising");
+      setFeedback({ msg: "운동 자세를 만들어 볼까요?", color: GUIDE_COLOR });
+    }, 1000);
+    countdownTimer.current = timer;
+  }
+
+  async function handleFinish() {
+    if (savingRef.current || !sessionRef.current) return;
+    const snapshot = saveRef.current ?? {
+      stats: sessionRef.current.stats(performance.now()),
+      sessionId: crypto.randomUUID(),
+    };
+    saveRef.current = snapshot;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    setCameraError(null);
+    setStatus("");
+    setElapsed(snapshot.stats.duration);
+    phaseRef.current = "finished";
+    setPhase("finished");
+    try {
+      await onComplete(snapshot.stats, snapshot.sessionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "잠시 뒤 다시 시도해 주세요.";
+      setSaveError("기록을 저장하지 못했어요. " + message);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -617,27 +451,36 @@ export default function PoseDetector({
             </button>
 
           {/* 상태 chip (좌상단) — 운동 중엔 숨김 (그땐 우측 패널 피드백이 안내) */}
-          {status && phase !== "exercising" && (
+          {status && phase !== "exercising" && phase !== "finished" && (
             <div className="pose-status-chip">{status}</div>
           )}
 
           {/* 준비 완료 → 시작 버튼 오버레이 + 카메라 위치 안내 */}
-          {phase === "ready" && (
+          {phase === "ready" && !cameraError && (
             <div className="video-overlay video-overlay-ready">
               <div className="ready-guide">
                 <div className="ready-guide-title">
-                  카메라를 {cameraPosition === "측면" ? "옆쪽" : "정면"} 1.5~2m
+                  카메라를 {cameraPosition === "측면" ? "옆쪽" : cameraPosition} 1.5~2m
                   거리에 두세요
                 </div>
                 <div className="ready-guide-sub">
                   {cameraPosition === "측면"
                     ? "이 운동은 옆모습으로 측정해요. 머리부터 발끝까지 옆모습이 보이게 해주세요."
-                    : "머리부터 발끝까지 앞모습이 전부 보이게 충분히 떨어져 주세요."}
+                    : cameraPosition === "대각선"
+                      ? "몸 앞쪽 움직임과 양쪽 관절이 보이도록 앞옆으로 카메라를 놓아 주세요."
+                      : "머리부터 발끝까지 앞모습이 전부 보이게 충분히 떨어져 주세요."}
                 </div>
               </div>
               <button className="start-btn" onClick={handleStart}>
                 ▶ 운동 시작
               </button>
+            </div>
+          )}
+
+          {cameraError && phase !== "finished" && (
+            <div className="video-overlay video-overlay-ready">
+              <p className="ready-guide-title">{cameraError}</p>
+              <button type="button" className="start-btn" onClick={retryCamera}>카메라 다시 연결</button>
             </div>
           )}
 
@@ -678,7 +521,7 @@ export default function PoseDetector({
       </div>
 
       <div className="pose-panel">
-        <div className="feedback-box" style={{ background: feedback.color }}>
+        <div className="feedback-box" role="status" style={{ background: feedback.color }}>
           {feedback.msg}
         </div>
         <div className="info-grid">
@@ -696,9 +539,10 @@ export default function PoseDetector({
           <InfoBox value={`${elapsed}s`} label="⏱ 운동 시간" />
           <InfoBox value={angleText} label="📐 현재 각도" className="angle-info-box" />
         </div>
-        {phase === "exercising" && (
-          <button className="finish-btn" onClick={handleFinish}>
-            운동 완료 & 기록 저장
+        {saveError && <p className="state-msg error" role="alert">{saveError}</p>}
+        {(phase === "exercising" || phase === "finished") && (
+          <button type="button" className="finish-btn" onClick={handleFinish} disabled={saving}>
+            {saving ? "기록 저장 중..." : saveError ? "기록 저장 다시 시도" : "운동 완료 & 기록 저장"}
           </button>
         )}
       </div>

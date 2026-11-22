@@ -1,16 +1,19 @@
 import type { Exercise } from "../types/exercise";
-import PoseDetector, { type SessionStats } from "./PoseDetector";
+import PoseDetector from "./PoseDetector";
 import ExerciseImage from "./ExerciseImage";
 import { EXERCISE_GUIDES, DEFAULT_GUIDE } from "../data/exerciseGuides";
+import type { SessionStats } from "../utils/exerciseSession";
+import { getTrackingUnavailableReason } from "../utils/pose";
 
 interface Props {
   exercise: Exercise;
   onBack: () => void;
-  onComplete: (stats: SessionStats) => void;
+  onComplete: (stats: SessionStats, sessionId: string) => Promise<void>;
 }
 
 export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) {
   const guide = EXERCISE_GUIDES[exercise.id] ?? DEFAULT_GUIDE;
+  const trackingUnavailable = getTrackingUnavailableReason(exercise);
 
   return (
     <div className="exercise-detail">
@@ -22,20 +25,23 @@ export default function ExerciseScreen({ exercise, onBack, onComplete }: Props) 
       <p className="exercise-meta">
         <span className="meta-chip">{exercise.bodyPart}</span>
         <span className="meta-chip meta-chip-soft">난이도 {exercise.difficulty}</span>
-        <span className="meta-chip meta-chip-soft">목표 {exercise.normalTarget}°</span>
-        <span className="meta-chip meta-chip-soft">
-          카메라 {guide.cameraPosition}
-        </span>
+        {!trackingUnavailable && (
+          <span className="meta-chip meta-chip-soft">카메라 {guide.cameraPosition}</span>
+        )}
       </p>
 
-      <PoseDetector
-        key={exercise.id}
-        exercise={exercise}
-        holdSeconds={guide.holdSeconds}
-        mode={guide.mode}
-        cameraPosition={guide.cameraPosition}
-        onComplete={onComplete}
-      />
+      {trackingUnavailable ? (
+        <p className="state-msg">{trackingUnavailable}</p>
+      ) : (
+        <PoseDetector
+          key={exercise.id}
+          exercise={exercise}
+          holdSeconds={guide.holdSeconds}
+          mode={guide.mode}
+          cameraPosition={guide.cameraPosition}
+          onComplete={onComplete}
+        />
+      )}
 
       {/* 운동 가이드 (이미지 + 4섹션) — 카메라 아래로 이동 */}
       <div className="exercise-guide exercise-guide-below">

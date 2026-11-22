@@ -2,7 +2,7 @@
 // 백엔드 exercises.json의 notes는 개발자용 메모라 사용자에게 안 보임.
 // 사용자에게 보여줄 설명은 모두 여기서 관리.
 
-export type CameraPosition = "정면" | "측면";
+export type CameraPosition = "정면" | "측면" | "대각선";
 // rep: 자세 잡고 → 풀고 반복 (대부분의 운동)
 // hold: 한 자세를 길게 유지 (플랭크 같은 유지형 — 카운트 대신 총 유지 시간 측정)
 export type ExerciseMode = "rep" | "hold";
@@ -23,6 +23,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     prepare: "의자에 허리를 펴고 앉으세요. 양손은 가볍게 주먹을 쥐고 무릎 위에 둡니다.",
     steps: [
       "숨을 들이마시며 양팔을 앞으로 천천히 들어 올리세요.",
+      "팔꿈치가 눈에 띄게 접히지 않도록 양팔을 가볍게 펴 주세요.",
       "팔이 눈높이 정도까지 올라가면 2초간 멈춥니다.",
       "숨을 내쉬며 팔을 천천히 무릎 위로 내려놓으세요.",
     ],
@@ -32,7 +33,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨 앞쪽 근육을 부드럽게 풀어줘서 일상 동작이 편해져요.",
     holdSeconds: 2,
-    cameraPosition: "정면",
+    cameraPosition: "대각선",
     mode: "rep",
   },
 
@@ -66,7 +67,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "가슴 근육을 강화해서 굽은 어깨를 펴는 데 도움이 됩니다.",
     holdSeconds: 2,
-    cameraPosition: "정면",
+    cameraPosition: "대각선",
     mode: "rep",
   },
 
@@ -237,7 +238,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "가슴과 팔 뒤쪽 근육을 안전하게 강화해줍니다.",
     holdSeconds: 2,
-    cameraPosition: "측면",
+    cameraPosition: "대각선",
     mode: "rep",
   },
 
@@ -408,7 +409,7 @@ export const EXERCISE_GUIDES: Record<string, ExerciseGuide> = {
     ],
     benefit: "어깨 가동성을 높이고 굽은 등을 시원하게 펴줍니다.",
     holdSeconds: 2,
-    cameraPosition: "측면",
+    cameraPosition: "대각선",
     mode: "rep",
   },
 

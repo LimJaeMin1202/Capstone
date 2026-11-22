@@ -1299,11 +1299,11 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .cam-video {
   transform: scaleX(-1);
-  object-fit: cover;
 }
 
 .cam-canvas {
@@ -1533,6 +1533,11 @@
 
 .finish-btn:hover {
   background: var(--primary-dark);
+}
+
+.finish-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 
 /* ===== 기록 화면 ===== */

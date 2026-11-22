@@ -54,8 +54,8 @@ export default function BirthYearModal({ mode = "required", onClose }: Props) {
         </h2>
         <p className="modal-desc">
           {isEdit
-            ? "연령대를 새로 선택하면 운동 기준이 다시 적용됩니다."
-            : "연령대에 맞는 운동 기준을 적용하기 위해 한 번만 알려주세요."}
+            ? "프로필에 표시되는 출생 연도대를 바꿀 수 있어요."
+            : "선택한 출생 연도대를 프로필에 저장해요."}
         </p>
 
         <div className="decade-grid">

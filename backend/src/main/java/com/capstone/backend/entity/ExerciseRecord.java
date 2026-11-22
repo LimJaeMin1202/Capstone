@@ -11,6 +11,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.UUID;
 
 @Entity
 @Table(name = "exercise_records")
@@ -35,7 +36,22 @@ public class ExerciseRecord {
     private Integer goodCount;         // 정확한 자세 횟수
 
     @Column(nullable = false)
-    private Integer accuracy;          // 정확도 (0~100)
+    private Integer accuracy;          // 자세 기준 충족률 (0~100)
+
+    @Column(name = "session_id", updatable = false)
+    private UUID sessionId;
+
+    @Column(length = 4)
+    private String mode;
+
+    @Column(name = "total_hold_seconds")
+    private Integer totalHoldSeconds;
+
+    @Column(name = "measured_frames")
+    private Integer measuredFrames;
+
+    @Column(name = "total_frames")
+    private Integer totalFrames;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")

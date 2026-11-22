@@ -1,5 +1,5 @@
 import type { Exercise } from "../types/exercise";
-import type { SessionStats } from "./PoseDetector";
+import type { SessionStats } from "../utils/exerciseSession";
 import ExerciseImage from "./ExerciseImage";
 
 interface Props {
@@ -16,6 +16,13 @@ function getCelebration(stats: SessionStats): {
   title: string;
   message: string;
 } {
+  if (stats.measuredFrames < 2 || stats.measuredFrames * 2 < stats.totalFrames) {
+    return {
+      emoji: "📷",
+      title: "자세가 충분히 보이지 않았어요",
+      message: "다음 운동에서는 가이드에 맞춰 필요한 관절이 카메라에 보이게 해주세요.",
+    };
+  }
   const accuracy = stats.accuracy;
   const noProgress =
     stats.mode === "hold"
@@ -72,6 +79,8 @@ export default function ResultScreen({
   onRecords,
 }: Props) {
   const celebration = getCelebration(stats);
+  const measured = stats.measuredFrames > 0;
+  const coverage = stats.totalFrames > 0 ? Math.round(stats.measuredFrames * 100 / stats.totalFrames) : 0;
 
   return (
     <div className="result-wrap">
@@ -113,14 +122,16 @@ export default function ResultScreen({
           <div className="result-stat-label">운동 시간</div>
         </div>
         <div className="result-stat">
-          <div className="result-stat-value">{stats.accuracy}%</div>
-          <div className="result-stat-label">정확도</div>
-          <div className="result-stat-bar">
-            <div
-              className="result-stat-bar-fill"
-              style={{ width: `${stats.accuracy}%` }}
-            />
+          <div className="result-stat-value">{measured ? stats.accuracy + "%" : "—"}</div>
+          <div className="result-stat-label">자세 기준 충족률</div>
+          <div className="result-stat-label">
+            {measured ? "측정 " + coverage + "% (" + stats.measuredFrames + "/" + stats.totalFrames + " 프레임)" : "자세를 측정하지 못했어요"}
           </div>
+          {measured && (
+            <div className="result-stat-bar">
+              <div className="result-stat-bar-fill" style={{ width: stats.accuracy + "%" }} />
+            </div>
+          )}
         </div>
       </div>
 

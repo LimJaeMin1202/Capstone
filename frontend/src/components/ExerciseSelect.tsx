@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Exercise } from "../types/exercise";
 import { fetchExercises } from "../api/exercises";
+import { getTrackingUnavailableReason } from "../utils/pose";
 import ExerciseImage from "./ExerciseImage";
 
 interface Props {
@@ -145,6 +146,7 @@ export default function ExerciseSelect({ onSelect }: Props) {
                 </div>
                 <span className="exercise-card-name">{ex.name}</span>
                 <span className="exercise-card-part">{ex.bodyPart}</span>
+                {getTrackingUnavailableReason(ex) && <span className="exercise-card-part">동작 안내 전용</span>}
                 <span
                   className={`exercise-card-badge ${
                     LEVEL_CLASS[ex.difficulty] ?? ""

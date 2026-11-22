@@ -11,7 +11,7 @@ function importSource(relativePath) {
   return import("data:text/javascript;charset=utf-8," + encodeURIComponent(outputText));
 }
 
-const [{ EXERCISE_GUIDES }, { ExerciseSession }, { analyzePose, calcAngle, getTrackingUnavailableReason }] =
+const [{ EXERCISE_GUIDES }, { ExerciseSession }, { analyzePose, calcAngle, getTrackingUnavailableReason, judgeLevel }] =
   await Promise.all([
     importSource("../src/data/exerciseGuides.ts"),
     importSource("../src/utils/exerciseSession.ts"),
@@ -152,14 +152,44 @@ const cases = {
 };
 
 const disabled = [
-  "seated-ankle-pump", "standing-hip-extension", "assisted-calf-raise", "kneeling-plank",
+  "seated-ankle-pump", "standing-hip-extension", "assisted-calf-raise",
 ];
+const plank = exercises.find((exercise) => exercise.id === "kneeling-plank");
 
 test("all 29 seed exercises have an automatic rule or a clear guide-only status", () => {
-  assert.deepEqual(exercises.map((ex) => ex.id).sort(), [...Object.keys(cases), ...disabled].sort());
+  assert.deepEqual(exercises.map((ex) => ex.id).sort(), [...Object.keys(cases), plank.id, ...disabled].sort());
   for (const exercise of exercises) {
     assert.equal(!!getTrackingUnavailableReason(exercise), disabled.includes(exercise.id), exercise.id);
     if (disabled.includes(exercise.id)) assert.equal(analyzePose(both(front), exercise).best, null);
+  }
+});
+
+test("kneeling plank uses its own increasing thresholds and enters a hold only at 165 degrees or above", () => {
+  assert.deepEqual([plank.jointA, plank.jointB, plank.jointC], ["어깨", "고관절", "무릎"]);
+  assert.deepEqual([plank.restAngle, plank.allowedTarget, plank.normalTarget], [180, 165, 180]);
+  assert.equal(getTrackingUnavailableReason(plank), null);
+  const guide = EXERCISE_GUIDES[plank.id];
+  for (const [angle, expected] of [[164, "fail"], [165, "success"], [179, "success"], [180, "perfect"]]) {
+    const radians = angle * Math.PI / 180;
+    const keypoints = pose({ s: [80, 0], h: [0, 0], k: [80 * Math.cos(radians), 80 * Math.sin(radians)] });
+    const result = analyzePose(keypoints, plank);
+    assert.equal(result.best?.angle, angle);
+    assert.equal(result.best?.level, expected);
+    assert.equal(judgeLevel(angle, plank), expected);
+    const session = new ExerciseSession(guide.mode, guide.holdSeconds, 0);
+    assert.equal(session.observe(result, 0).phase, expected === "fail" ? "rest" : "holding");
+  }
+});
+
+test("the base angle classification of all other exercises is unchanged", () => {
+  for (const exercise of exercises.filter((exercise) => exercise.id !== plank.id)) {
+    for (let angle = 0; angle <= 180; angle++) {
+      const { restAngle, normalTarget, allowedTarget } = exercise;
+      const reachesNormal = normalTarget > restAngle ? angle >= normalTarget : angle <= normalTarget;
+      const reachesAllowed = normalTarget > restAngle ? angle >= allowedTarget : angle <= allowedTarget;
+      const expected = reachesNormal ? "perfect" : reachesAllowed ? "success" : "fail";
+      assert.equal(judgeLevel(angle, exercise), expected, exercise.id + " at " + angle);
+    }
   }
 });
 
@@ -169,11 +199,11 @@ function observe(session, exercise, input, time) {
 
 function playCycle(exercise, input, rest) {
   const guide = EXERCISE_GUIDES[exercise.id];
-  const elapsed = guide.holdSeconds * 1000;
+  const completedAt = guide.holdSeconds * 1000 + 400;
   const session = new ExerciseSession(guide.mode, guide.holdSeconds, 0);
-  for (let t = 0; t <= elapsed; t += 100) observe(session, exercise, input, t);
-  for (let t = elapsed + 100; t <= elapsed + 500; t += 100) observe(session, exercise, rest, t);
-  return session.stats(elapsed + 500);
+  for (let t = 0; t <= completedAt; t += 100) observe(session, exercise, input, t);
+  for (let t = completedAt + 100; t <= completedAt + 700; t += 100) observe(session, exercise, rest, t);
+  return session.stats(completedAt + 700);
 }
 
 for (const [id, [correct, compensation, rest]] of Object.entries(cases)) {
@@ -190,37 +220,95 @@ for (const [id, [correct, compensation, rest]] of Object.entries(cases)) {
 
 const frontExercise = exercises.find((ex) => ex.id === "seated-front-raise");
 const [frontGood, , frontRest] = cases[frontExercise.id];
+const frontOccluded = frontGood.map((point, i) => i === 9 ? { ...point, score: 0.29 } : point);
 
-test("the zero badge and hold completion coincide, with release counted once", () => {
+function completeFrontHold(session) {
+  for (let time = 0; time <= 2400; time += 100) observe(session, frontExercise, frontGood, time);
+}
+
+test("the zero badge starts at H, hold completes at H + 400, and release observes the 300 ms grace", () => {
   const session = new ExerciseSession("rep", 2, 0);
   for (let time = 0; time < 2000; time += 100) observe(session, frontExercise, frontGood, time);
-  const completed = observe(session, frontExercise, frontGood, 2000);
+  const goal = observe(session, frontExercise, frontGood, 2000);
+  assert.equal(goal.phase, "holding");
+  assert.equal(goal.remainingSeconds, 0);
+  for (const time of [2100, 2200, 2399]) assert.equal(observe(session, frontExercise, frontGood, time).phase, "holding");
+  const completed = observe(session, frontExercise, frontGood, 2400);
   assert.equal(completed.phase, "satisfied");
   assert.equal(completed.remainingSeconds, 0);
   assert.equal(completed.count, 0);
-  for (let time = 2100; time <= 2900; time += 100) observe(session, frontExercise, frontRest, time);
-  assert.equal(session.stats(2900).goodCount, 1);
+  for (const time of [2500, 2600, 2699, 2700, 2800, 2900, 3000, 3099]) {
+    assert.equal(observe(session, frontExercise, frontRest, time).count, 0);
+  }
+  assert.equal(observe(session, frontExercise, frontRest, 3100).count, 1);
+  assert.equal(observe(session, frontExercise, frontRest, 3500).count, 1);
 });
 
-test("missing frames contribute neither hold nor release and are reported as unmeasured", () => {
-  const session = new ExerciseSession("hold", 2, 0);
+test("an observed out-of-range pose retains the hold for less than 300 ms", () => {
+  const session = new ExerciseSession("rep", 2, 0);
   observe(session, frontExercise, frontGood, 0);
-  for (let time = 100; time < 5000; time += 100) session.observe(null, time);
-  const resumed = observe(session, frontExercise, frontGood, 5000);
-  assert.equal(resumed.phase, "holding");
-  assert.equal(resumed.totalHoldSeconds, 0);
-  const stats = session.stats(5000);
-  assert.equal(stats.totalFrames, 51);
-  assert.equal(stats.measuredFrames, 2);
+  observe(session, frontExercise, frontGood, 200);
+  assert.equal(observe(session, frontExercise, frontRest, 499).phase, "holding");
+  assert.equal(observe(session, frontExercise, frontRest, 500).phase, "rest");
+});
 
-  const beforeRelease = new ExerciseSession("rep", 2, 0);
-  for (let time = 0; time <= 2000; time += 100) observe(beforeRelease, frontExercise, frontGood, time);
-  observe(beforeRelease, frontExercise, frontRest, 2100);
-  for (let time = 2200; time <= 2700; time += 100) beforeRelease.observe(null, time);
-  assert.equal(beforeRelease.stats(2700).goodCount, 0);
-  assert.equal(observe(beforeRelease, frontExercise, frontRest, 2800).count, 0);
-  for (let time = 2900; time <= 3200; time += 100) observe(beforeRelease, frontExercise, frontRest, time);
-  assert.equal(beforeRelease.stats(3200).goodCount, 1);
+for (const [label, missingInput] of [["no pose", []], ["no representative angle", frontOccluded]]) {
+  test(label + " resets an incomplete hold on the first missing frame without crediting the gap", () => {
+    const session = new ExerciseSession("rep", 2, 0);
+    for (let time = 0; time <= 1900; time += 100) observe(session, frontExercise, frontGood, time);
+    const before = session.stats(1900);
+    const missing = observe(session, frontExercise, missingInput, 1920);
+    assert.equal(missing.kind, "missing");
+    assert.equal(missing.phase, "rest");
+    assert.equal(session.stats(1920).measuredFrames, before.measuredFrames);
+    const resumed = observe(session, frontExercise, frontGood, 2070);
+    assert.equal(resumed.phase, "holding");
+    assert.equal(resumed.remainingSeconds, 2);
+    assert.equal(resumed.totalHoldSeconds, before.totalHoldSeconds);
+    assert.equal(session.stats(2070).totalFrames, before.totalFrames + 2);
+    assert.equal(observe(session, frontExercise, frontGood, 2170).totalHoldSeconds, 2);
+  });
+
+  test(label + " preserves a completed hold, cancels release, and requires 400 ms of observed release again", () => {
+    const session = new ExerciseSession("rep", 2, 0);
+    completeFrontHold(session);
+    for (const time of [2500, 2600, 2700, 2800, 2900]) observe(session, frontExercise, frontRest, time);
+    for (const time of [2910, 3200, 3800]) {
+      const missing = observe(session, frontExercise, missingInput, time);
+      assert.equal(missing.phase, "satisfied");
+      assert.equal(missing.count, 0);
+    }
+    for (const time of [3900, 4000, 4100, 4200, 4299]) {
+      assert.equal(observe(session, frontExercise, frontRest, time).count, 0);
+    }
+    assert.equal(observe(session, frontExercise, frontRest, 4300).count, 1);
+    assert.equal(observe(session, frontExercise, frontRest, 4400).count, 1);
+  });
+}
+
+test("remeasurement within the grace window cannot start release early", () => {
+  const session = new ExerciseSession("rep", 2, 0);
+  completeFrontHold(session);
+  observe(session, frontExercise, frontOccluded, 2440);
+  for (const time of [2500, 2600, 2699, 2700, 2800, 2900, 3099]) {
+    assert.equal(observe(session, frontExercise, frontRest, time).count, 0);
+  }
+  assert.equal(observe(session, frontExercise, frontRest, 3100).count, 1);
+});
+
+test("interrupting tracking preserves confirmed counts, accumulated hold and the measured frame ratio", () => {
+  const session = new ExerciseSession("rep", 2, 0);
+  completeFrontHold(session);
+  for (const time of [2700, 2800, 2900, 3000, 3100]) observe(session, frontExercise, frontRest, time);
+  const before = session.stats(3100);
+  assert.equal(before.goodCount, 1);
+  assert.equal(before.totalHoldSeconds, 2);
+  assert.equal(before.accuracy, Math.round(25 * 100 / 30));
+
+  session.interrupt();
+  assert.deepEqual(session.stats(3100), before);
+  assert.equal(observe(session, frontExercise, [], 6000).count, 1);
+  assert.deepEqual(session.stats(6000), { ...before, duration: 6, totalFrames: before.totalFrames + 1 });
 });
 
 test("a long pause with no frames restarts the hold, and an active side cannot be swapped", () => {
@@ -230,6 +318,7 @@ test("a long pause with no frames restarts the hold, and an active side cannot b
   assert.equal(session.activeSide, "left");
   const otherLeg = observe(session, exercise, pose({}, legExtension), 1100);
   assert.equal(otherLeg.kind, "missing");
+  assert.equal(otherLeg.phase, "rest");
   const resumed = observe(session, exercise, pose(legExtension), 6000);
   assert.equal(resumed.phase, "holding");
   assert.equal(resumed.remainingSeconds, 2);
@@ -238,7 +327,6 @@ test("a long pause with no frames restarts the hold, and an active side cannot b
 
 test("unreliable or overlapping required keypoints cannot qualify a frame", () => {
   assert.equal(calcAngle({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 40 }), null);
-  const occluded = frontGood.map((point, i) => i === 9 ? { ...point, score: 0.29 } : point);
-  assert.equal(analyzePose(occluded, frontExercise).best, null);
+  assert.equal(analyzePose(frontOccluded, frontExercise).best, null);
   assert.equal(analyzePose([], frontExercise).best, null);
 });

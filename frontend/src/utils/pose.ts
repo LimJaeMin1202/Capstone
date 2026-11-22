@@ -61,7 +61,7 @@ function readPoint(points: Keypoint[], side: Side, joint: JointRef): Point | und
 }
 
 export function judgeLevel(angle: number, exercise: Exercise): Level {
-  if (exercise.normalTarget > exercise.restAngle) {
+  if (angleIncreases(exercise, exerciseRule(exercise))) {
     if (angle >= exercise.normalTarget) return "perfect";
     return angle >= exercise.allowedTarget ? "success" : "fail";
   }
@@ -78,6 +78,7 @@ interface Check {
 interface Rule {
   sides: "one" | "both" | "front";
   checks: Check[];
+  angleDirection?: "increasing" | "decreasing";
   limitDepth?: boolean;
   release?: Pick<Check, "joints" | "matches">;
 }
@@ -232,6 +233,7 @@ const RULES: Record<string, Rule> = {
       horizontal(s, w) && forwardOf(s, w, h, s) && extended(s, e, w),
     "뻗은 다리의 반대쪽 팔을 앞으로 뻗어 주세요"),
   ] },
+  "kneeling-plank": { sides: "one", checks: [], angleDirection: "increasing" },
   "lying-heel-touch": { sides: "one", release: {
     joints: ["hip", "shoulder"],
     matches: (h, s) => raised(h, s) === false,
@@ -246,11 +248,16 @@ const UNAVAILABLE: Record<string, string> = {
   "seated-ankle-pump": "발끝 움직임을 측정할 수 없어 자동 집계를 준비 중이에요.",
   "standing-hip-extension": "다리를 뒤로 뻗는 방향을 확인하는 자동 판정을 준비 중이에요.",
   "assisted-calf-raise": "발뒤꿈치 상승과 복귀를 확인하는 자동 판정을 준비 중이에요.",
-  "kneeling-plank": "몸통 정렬과 지지 자세를 확인하는 자동 판정을 준비 중이에요.",
 };
 
 function exerciseRule(exercise: Exercise): Rule | undefined {
   return Object.hasOwn(RULES, exercise.id) ? RULES[exercise.id] : undefined;
+}
+
+function angleIncreases(exercise: Exercise, rule: Rule | undefined): boolean {
+  return rule?.angleDirection === undefined
+    ? exercise.normalTarget > exercise.restAngle
+    : rule.angleDirection === "increasing";
 }
 
 export function getTrackingUnavailableReason(exercise: Exercise): string | null {
@@ -258,11 +265,13 @@ export function getTrackingUnavailableReason(exercise: Exercise): string | null 
   const joints = [exercise.jointA, exercise.jointB, exercise.jointC];
   const { restAngle, normalTarget, allowedTarget } = exercise;
   const angles = [restAngle, normalTarget, allowedTarget];
-  const ordered = normalTarget > restAngle
-    ? restAngle < allowedTarget && allowedTarget <= normalTarget
-    : normalTarget <= allowedTarget && allowedTarget < restAngle;
-  if (!exerciseRule(exercise) || joints.some((joint) => !Object.hasOwn(JOINT_NAMES, joint))
-    || new Set(joints).size !== 3 || !ordered
+  const rule = exerciseRule(exercise);
+  const increasing = angleIncreases(exercise, rule);
+  const ordered = increasing ? allowedTarget <= normalTarget : normalTarget <= allowedTarget;
+  const hasValidStart = rule?.angleDirection !== undefined
+    || (increasing ? restAngle < allowedTarget : allowedTarget < restAngle);
+  if (!rule || joints.some((joint) => !Object.hasOwn(JOINT_NAMES, joint))
+    || new Set(joints).size !== 3 || !ordered || !hasValidStart
     || angles.some((angle) => !Number.isFinite(angle) || angle < 0 || angle > 180)) {
     return "이 운동은 가이드에서 동작을 확인할 수 있어요. 자동 집계를 준비 중이에요.";
   }

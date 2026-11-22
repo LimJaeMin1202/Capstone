@@ -120,6 +120,11 @@ function drawSkeleton(canvas: HTMLCanvasElement, video: HTMLVideoElement, keypoi
   ctx.restore();
 }
 
+function smoothAngle(previous: number | null, angle: number | undefined) {
+  if (angle === undefined) return null;
+  return previous === null ? angle : previous * 0.7 + angle * 0.3;
+}
+
 export default function PoseDetector({ exercise, holdSeconds, mode, cameraPosition, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -184,6 +189,10 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
     let lastFreshFrameTime = performance.now();
     let lastUpdatedAt = 0;
     let lastMessage = "";
+    let leftEma: number | null = null;
+    let rightEma: number | null = null;
+    let wasMissing = false;
+    let pendingCount: number | null = null;
 
     function disposeModel() {
       detector?.dispose();
@@ -231,14 +240,26 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       if (phaseRef.current !== "exercising" || !session) return;
       const pose = analyzePose(points, exercise, session.activeSide);
       const progress = session.observe(pose, now);
+      leftEma = smoothAngle(leftEma, pose.left?.angle);
+      rightEma = smoothAngle(rightEma, pose.right?.angle);
+      if (progress.counted) {
+        setCount(progress.count);
+        pendingCount = progress.count;
+      }
+      const missing = progress.kind === "missing";
+      const trackingLost = missing && !wasMissing;
+      wasMissing = missing;
+      if (!trackingLost && now - lastUpdatedAt < UI_INTERVAL_MS) return;
+      lastUpdatedAt = now;
+
       let message = pose.hint ?? "운동 자세를 천천히 만들어 보세요";
       let color = GUIDE_COLOR;
 
-      if (progress.kind === "missing") {
+      if (missing) {
         message = pose.hint ?? "필요한 관절이 화면에 보이게 해주세요";
         color = WARNING_COLOR;
-      } else if (progress.counted) {
-        message = "🎉 " + progress.count + "회 완료! 다음 자세 준비";
+      } else if (pendingCount !== null) {
+        message = "🎉 " + pendingCount + "회 완료! 다음 자세 준비";
         color = "#1e9e54";
       } else if (progress.phase === "satisfied") {
         message = mode === "hold" ? "목표 시간에 도달했어요" : "충분해요! 천천히 자세를 풀어 주세요";
@@ -248,19 +269,19 @@ export default function PoseDetector({ exercise, holdSeconds, mode, cameraPositi
       } else {
         color = WARNING_COLOR;
       }
+      pendingCount = null;
 
       if (message !== lastMessage) {
         lastMessage = message;
         setFeedback({ msg: message, color });
       }
-      if (progress.completed || progress.counted || progress.kind === "missing" || now - lastUpdatedAt >= UI_INTERVAL_MS) {
-        lastUpdatedAt = now;
-        const angles = [pose.left && "왼 " + pose.left.angle + "°", pose.right && "오른 " + pose.right.angle + "°"];
-        setAngleText(angles.filter(Boolean).join("\n") || "-");
-        setHoldCountdown(progress.kind === "missing" ? null : progress.remainingSeconds);
-        setCount(progress.count);
-        setTotalHoldSec(progress.totalHoldSeconds);
-      }
+      const angles = [
+        leftEma === null ? null : "왼 " + Math.round(leftEma) + "°",
+        rightEma === null ? null : "오른 " + Math.round(rightEma) + "°",
+      ];
+      setAngleText(angles.filter(Boolean).join("\n") || "-");
+      setHoldCountdown(missing ? null : progress.remainingSeconds);
+      setTotalHoldSec(progress.totalHoldSeconds);
     }
 
     async function detectFrame() {

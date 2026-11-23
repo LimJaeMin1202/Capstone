@@ -13,15 +13,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  deployment-checks:
+    name: Deployment checks
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Report deployment conditions
+        id: check
+        shell: bash
+        env:
+          CD_ENABLED: ${{ vars.CAREFIT_CD_ENABLED == 'true' }}
+          CI_SUCCEEDED: ${{ github.event.workflow_run.conclusion == 'success' }}
+          CI_PUSH: ${{ github.event.workflow_run.event == 'push' }}
+          CI_MAIN: ${{ github.event.workflow_run.head_branch == 'main' }}
+          CI_SAME_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
+        run: |
+          ready=false
+          if [[ "$CD_ENABLED" == true && "$CI_SUCCEEDED" == true && "$CI_PUSH" == true &&
+                "$CI_MAIN" == true && "$CI_SAME_REPOSITORY" == true ]]; then
+            ready=true
+          fi
+          printf 'ready=%s\n' "$ready" >> "$GITHUB_OUTPUT"
+
+          printf '%s\n' \
+            '## Deployment conditions' \
+            '' \
+            "- CAREFIT_CD_ENABLED equals true — **$CD_ENABLED**" \
+            "- CI completed successfully — **$CI_SUCCEEDED**" \
+            "- CI was triggered by a push — **$CI_PUSH**" \
+            "- CI ran for main — **$CI_MAIN**" \
+            "- CI ran in this repository — **$CI_SAME_REPOSITORY**" \
+            "- Eligible for deployment — **$ready**" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
   deploy:
-    if: >-
-      ${{
-        vars.CAREFIT_CD_ENABLED == 'true' &&
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.head_repository.full_name == github.repository
-      }}
+    needs: deployment-checks
+    if: ${{ needs.deployment-checks.outputs.ready == 'true' }}
     runs-on: [self-hosted, linux, x64, carefit]
     timeout-minutes: 30
     steps:

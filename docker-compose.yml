@@ -34,7 +34,7 @@ services:
     container_name: carefit-backend
     restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-12003}:8080"
+      - "127.0.0.1:${BACKEND_PORT:-12003}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/capstone
@@ -70,7 +70,7 @@ services:
     container_name: carefit-frontend
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-12002}:80"
+      - "127.0.0.1:${WEB_PORT:-12002}:80"
     depends_on:
       backend:
         condition: service_healthy

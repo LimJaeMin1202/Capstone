@@ -1,9 +1,9 @@
 name: Deploy CareFit
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,54 +13,113 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deployment-checks:
-    name: Deployment checks
+  backend:
+    name: Backend compile and test
     runs-on: ubuntu-latest
-    permissions: {}
-    timeout-minutes: 5
-    outputs:
-      ready: ${{ steps.check.outputs.ready }}
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - name: Report deployment conditions
-        id: check
-        shell: bash
-        env:
-          CD_ENABLED: ${{ vars.CAREFIT_CD_ENABLED == 'true' }}
-          CI_SUCCEEDED: ${{ github.event.workflow_run.conclusion == 'success' }}
-          CI_PUSH: ${{ github.event.workflow_run.event == 'push' }}
-          CI_MAIN: ${{ github.event.workflow_run.head_branch == 'main' }}
-          CI_SAME_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
-        run: |
-          ready=false
-          if [[ "$CD_ENABLED" == true && "$CI_SUCCEEDED" == true && "$CI_PUSH" == true &&
-                "$CI_MAIN" == true && "$CI_SAME_REPOSITORY" == true ]]; then
-            ready=true
-          fi
-          printf 'ready=%s\n' "$ready" >> "$GITHUB_OUTPUT"
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: backend/**/*.gradle*
+      - name: Compile and test
+        run: bash ./gradlew compileJava test --no-daemon
 
-          printf '%s\n' \
-            '## Deployment conditions' \
-            '' \
-            "- CAREFIT_CD_ENABLED equals true — **$CD_ENABLED**" \
-            "- CI completed successfully — **$CI_SUCCEEDED**" \
-            "- CI was triggered by a push — **$CI_PUSH**" \
-            "- CI ran for main — **$CI_MAIN**" \
-            "- CI ran in this repository — **$CI_SAME_REPOSITORY**" \
-            "- Eligible for deployment — **$ready**" \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+  frontend:
+    name: Frontend install, lint, test, and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run frontend tests
+        run: npm test
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build
 
   deploy:
-    needs: deployment-checks
-    if: ${{ needs.deployment-checks.outputs.ready == 'true' }}
-    runs-on: [self-hosted, linux, x64, carefit]
-    timeout-minutes: 30
+    name: Deploy on Daisy runner
+    needs: [backend, frontend]
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: self-hosted
+    timeout-minutes: 45
+    env:
+      CAREFIT_DEPLOY_DIR: ${{ vars.CAREFIT_DEPLOY_DIR }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-      - name: Deploy tested commit
-        env:
-          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
-          CAREFIT_DEPLOY_DIR: ${{ vars.CAREFIT_DEPLOY_DIR }}
-        run: bash deploy/deploy.sh "$TARGET_SHA"
+      - name: Update the tested commit and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${CAREFIT_DEPLOY_DIR:?Set the repository variable CAREFIT_DEPLOY_DIR to the verified server checkout path}"
+          if [[ "$CAREFIT_DEPLOY_DIR" != /* ]]; then
+            echo "CAREFIT_DEPLOY_DIR must be an absolute path." >&2
+            exit 1
+          fi
+          if [[ ! -d "$CAREFIT_DEPLOY_DIR/.git" || ! -f "$CAREFIT_DEPLOY_DIR/.env" ]]; then
+            echo "The server checkout or its .env file is missing." >&2
+            exit 1
+          fi
+          if [[ "$(git -C "$CAREFIT_DEPLOY_DIR" branch --show-current)" != "main" ]]; then
+            echo "The server checkout must be on main." >&2
+            exit 1
+          fi
+          git -C "$CAREFIT_DEPLOY_DIR" fetch --no-tags origin main
+          if ! git -C "$CAREFIT_DEPLOY_DIR" merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "This tested commit is no longer on origin/main." >&2
+            exit 1
+          fi
+          git -C "$CAREFIT_DEPLOY_DIR" pull --ff-only origin main
+          if [[ "$(git -C "$CAREFIT_DEPLOY_DIR" rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo "main moved during deployment; refusing to deploy an untested commit." >&2
+            exit 1
+          fi
+
+          cd "$CAREFIT_DEPLOY_DIR"
+          docker compose --env-file .env config --quiet
+          bash deploy/backup-db.sh
+          docker compose --env-file .env up -d --build
+          docker compose --env-file .env ps
+
+          web_endpoint="$(docker compose --env-file .env port frontend 80 | tail -n 1)"
+          backend_endpoint="$(docker compose --env-file .env port backend 8080 | tail -n 1)"
+          web_port="${web_endpoint##*:}"
+          backend_port="${backend_endpoint##*:}"
+          if [[ ! "$web_port" =~ ^[0-9]+$ || ! "$backend_port" =~ ^[0-9]+$ ]]; then
+            echo "Could not determine the published localhost ports." >&2
+            exit 1
+          fi
+
+          for attempt in {1..36}; do
+            if curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${web_port}/healthz" \
+              && curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${backend_port}/api/health"; then
+              echo "CareFit frontend and backend localhost health checks passed."
+              docker compose --env-file .env ps
+              exit 0
+            fi
+            if (( attempt == 36 )); then
+              echo "CareFit localhost health check failed." >&2
+              docker compose --env-file .env ps
+              exit 1
+            fi
+            sleep 5
+          done
